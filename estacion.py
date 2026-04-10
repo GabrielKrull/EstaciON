@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+from datetime import datetime, date
 
 BG    = "#0a0a0a"
 BG2   = "#141414"
@@ -17,37 +18,56 @@ FONTH = ("Arial", 12, "bold")
 
 #Principal
 
+import tkinter as tk
+from tkinter import ttk
+from datetime import date
+
 janela = tk.Tk()
 janela.title("estaciON")
+janela.geometry("800x400") # Definindo um tamanho inicial maior
 
 abas = ttk.Notebook(janela)
 abas.pack(expand=True, fill="both")
 
-# ABA CADASTRO DE CLIENTES 
+# --- ABA CADASTRO DE CLIENTES ---
 aba_cadastroCliente = tk.Frame(abas)
 abas.add(aba_cadastroCliente, text="Cadastro de Clientes")
 
-tk.Label(aba_cadastroCliente, text="Cadastro de Clientes")
+# Título da aba (ocupando todas as colunas)
+tk.Label(aba_cadastroCliente, text="CADASTRO DE CLIENTES", font=FONTH).grid(row=0, column=0, columnspan=6, pady=10)
 
-tk.Label(aba_cadastroCliente, text="Nome:").grid(row=1, column=0)
+# Configurando a responsividade das colunas de entrada (1, 3 e 5)
+aba_cadastroCliente.columnconfigure((1, 3, 5), weight=1)
+
+tk.Label(aba_cadastroCliente, text="Nome:").grid(row=1, column=0, padx=5, sticky="e")
 entrada_nomeCliente = tk.Entry(aba_cadastroCliente)
-entrada_nomeCliente.grid(row=1, column=1)
+entrada_nomeCliente.grid(row=1, column=1, padx=5, sticky="ew")
 
-tk.Label(aba_cadastroCliente, text="CPF:").grid(row=1, column=2)
+tk.Label(aba_cadastroCliente, text="CPF:").grid(row=1, column=2, padx=5, sticky="e")
 entrada_cpf = tk.Entry(aba_cadastroCliente)
-entrada_cpf.grid(row=1, column=3)
+entrada_cpf.grid(row=1, column=3, padx=5, sticky="ew")
 
-tk.Label(aba_cadastroCliente, text="Placa do veículo:").grid(row=1, column=4)
+tk.Label(aba_cadastroCliente, text="Placa:").grid(row=1, column=4, padx=5, sticky="e")
 entrada_placaVeiculo = tk.Entry(aba_cadastroCliente)
-entrada_placaVeiculo.grid(row=1, column=5)
+entrada_placaVeiculo.grid(row=1, column=5, padx=5, sticky="ew")
 
+# --- ABA MOVIMENTAÇÃO ---
 aba_movimentacao = tk.Frame(abas)
 abas.add(aba_movimentacao, text="Movimentação")
 
-tk.Label(aba_movimentacao, text="Placa do veículo: ")
-entrada_placaVeiculo = tk.Entry(aba_movimentacao)
-entrada_placaVeiculo.grid(row=1, column=1)
+# Configurando colunas 2 e 4 para expandirem
+aba_movimentacao.columnconfigure((2, 4), weight=1)
 
+tk.Label(aba_movimentacao, text="Placa: ").grid(row=1, column=1, padx=5, sticky="e")
+entrada_placa_mov = tk.Entry(aba_movimentacao)
+entrada_placa_mov.grid(row=1, column=2, padx=5, sticky="ew")
+
+tk.Label(aba_movimentacao, text="Data: ").grid(row=1, column=3, padx=5, sticky="e")
+entrada_data = tk.Entry(aba_movimentacao)
+entrada_data.insert(0, date.today().isoformat())
+entrada_data.grid(row=1, column=4, padx=5, sticky="ew")
+
+# Outras abas (apenas placeholders)
 aba_financeiro = tk.Frame(abas)
 abas.add(aba_financeiro, text="Financeiro")
 
@@ -55,4 +75,5 @@ aba_relatorio = tk.Frame(abas)
 abas.add(aba_relatorio, text="Recebimento em Aberto")
 
 janela.mainloop()
+
 #blablablablublublu 

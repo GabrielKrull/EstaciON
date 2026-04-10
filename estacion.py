@@ -67,12 +67,16 @@ entrada_data = tk.Entry(aba_movimentacao)
 entrada_data.insert(0, date.today().isoformat())
 entrada_data.grid(row=1, column=4, padx=5, sticky="ew")
 
+tk.Label(aba_movimentacao,text="Entrada: ").grid(row=1, column=5, padx=5,sticky="e")
+entrada_entrada = tk.Entry(aba_movimentacao)
+entrada_entrada.grid(row=1, column=6, padx=5, sticky="e")
+
 # Outras abas (apenas placeholders)
 aba_financeiro = tk.Frame(abas)
 abas.add(aba_financeiro, text="Financeiro")
 
 aba_relatorio = tk.Frame(abas)
-abas.add(aba_relatorio, text="Recebimento em Aberto")
+abas.add(aba_relatorio, text="Relatório")
 
 janela.mainloop()
 

@@ -39,3 +39,4 @@ aba_relatorio = tk.Frame(abas)
 abas.add(aba_relatorio, text="Recebimento em Aberto")
 
 janela.mainloop()
+#blablablablublublu 

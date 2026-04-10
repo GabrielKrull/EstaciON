@@ -71,6 +71,10 @@ tk.Label(aba_movimentacao,text="Entrada: ").grid(row=1, column=5, padx=5,sticky=
 entrada_entrada = tk.Entry(aba_movimentacao)
 entrada_entrada.grid(row=1, column=6, padx=5, sticky="e")
 
+tk.Label(aba_movimentacao,text="Saída: ").grid(row=1, column=6, padx=5,sticky="e")
+entrada_entrada = tk.Entry(aba_movimentacao)
+entrada_entrada.grid(row=1, column=7, padx=5, sticky="e")
+
 # Outras abas (apenas placeholders)
 aba_financeiro = tk.Frame(abas)
 abas.add(aba_financeiro, text="Financeiro")

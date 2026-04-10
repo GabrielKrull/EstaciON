@@ -1,6 +1,18 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+BG    = "#0a0a0a"
+BG2   = "#141414"
+BG3   = "#1e1e1e"
+AZUL  = "#1565C0"
+AZUL2 = "#1976D2"
+VERM  = "#C62828"
+BRAN  = "#FFFFFF"
+CINZA = "#9E9E9E"
+FONT  = ("Arial", 10)
+FONTB = ("Arial", 10, "bold")
+FONTH = ("Arial", 12, "bold")
+
 #Janelas
 
 #Principal
@@ -31,6 +43,10 @@ entrada_placaVeiculo.grid(row=1, column=5)
 
 aba_movimentacao = tk.Frame(abas)
 abas.add(aba_movimentacao, text="Movimentação")
+
+tk.Label(aba_movimentacao, text="Placa do veículo: ")
+entrada_placaVeiculo = tk.Entry(aba_movimentacao)
+entrada_placaVeiculo.grid(row=1, column=1)
 
 aba_financeiro = tk.Frame(abas)
 abas.add(aba_financeiro, text="Financeiro")

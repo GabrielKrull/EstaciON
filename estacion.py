@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
+import sqlite3
 
 # --- CONFIGURAÇÕES DE CORES E FONTES ---
 BG    = "#081122"
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS movimentacoes (
     entrada TEXT    NOT NULL,
     saida   TEXT,
     valor   REAL    DEFAULT 0.0,
-    pago    INTEGER DEFAULT 0,0
+    pago    INTEGER DEFAULT 0,
     FOREIGN KEY (placa) REFERENCES clientes(placa)
 );
 """)

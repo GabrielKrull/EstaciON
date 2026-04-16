@@ -99,12 +99,94 @@ def validar_placa(placa):
     padrao_mercosul = r'^[A-Z]{3}[0-9][A-Z][0-9]{2}$'
     return re.match(padrao_antigo, placa) or re.match(padrao_mercosul, placa)
 
+# --- ADICIONE JUNTO DAS FUNÇÕES ---
+
+def limpar_placa(placa):
+    return placa.upper().replace("-", "").strip()
+
+def formatar_placa_exibicao(placa):
+    placa = limpar_placa(placa)
+    if len(placa) >= 7:
+        return placa[:3] + "-" + placa[3:]
+    return placa
+
+def mascara_placa(event):
+    widget = event.widget
+
+    texto_original = widget.get()
+    pos_original = widget.index(tk.INSERT)
+
+    texto = texto_original.upper().replace("-", "")
+    texto = texto[:7]
+
+    # Detecta Mercosul (5º caractere é letra)
+    if len(texto) >= 5 and texto[4].isalpha():
+        novo = texto
+        tem_hifen = False
+    else:
+        if len(texto) > 3:
+            novo = texto[:3] + "-" + texto[3:]
+            tem_hifen = True
+        else:
+            novo = texto
+            tem_hifen = False
+
+    widget.delete(0, tk.END)
+    widget.insert(0, novo)
+
+    # --- Ajuste inteligente do cursor ---
+    nova_pos = pos_original
+
+    # Se adicionou hífen
+    if tem_hifen and pos_original == 4:
+        nova_pos += 1
+
+    # Se removeu hífen (Mercosul)
+    if not tem_hifen and "-" in texto_original and pos_original > 3:
+        nova_pos -= 1
+
+    try:
+        widget.icursor(nova_pos)
+    except:
+        pass
+
+def formatar_data(event):
+    texto = entrada_data.get().replace("/", "")[:8]
+
+    if len(texto) >= 4:
+        novo = texto[:4] + "/"
+        if len(texto) >= 6:
+            novo += texto[4:6] + "/" + texto[6:8]
+        else:
+            novo += texto[4:6]
+    else:
+        novo = texto
+
+    entrada_data.delete(0, tk.END)
+    entrada_data.insert(0, novo)
+
+def formatar_hora(event):
+    widget = event.widget
+    texto = widget.get().replace(":", "")[:4]
+
+    if len(texto) >= 3:
+        texto = texto[:2] + ":" + texto[2:]
+
+    widget.delete(0, tk.END)
+    widget.insert(0, texto)
+
+def atualizar_hora():
+    agora = datetime.now().strftime("%H:%M")
+    entrada_hora_in.delete(0, tk.END)
+    entrada_hora_in.insert(0, agora)
+    janela.after(1000, atualizar_hora)
+
 # --- FUNÇÕES DO SISTEMA ---
 
 def salvar():
     nome  = entrada_nomeCliente.get().strip()
-    cpf   = entrada_cpf.get().strip()
-    placa = entrada_placaVeiculo.get().strip().upper()
+    cpf   = re.sub(r'\D', '', entrada_cpf.get())
+    placa = limpar_placa(entrada_placaVeiculo.get())
 
     if not validar_cpf(cpf):
         messagebox.showerror("Erro", "CPF inválido")
@@ -132,7 +214,7 @@ def limpar_movimentacao():
     entrada_hora_in.delete(0, tk.END)
     entrada_hora_out.delete(0, tk.END)
     entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
+    entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
 
 
 def limpar_tabela():
@@ -141,7 +223,7 @@ def limpar_tabela():
         messagebox.showwarning("Atenção", "Selecione um registro para excluir.")
         return
 
-    item   = tabela_mov.item(selecionado)
+    item   = tabela_mov.item(selecionado[0])
     id_mov = item["values"][0]
 
     if not messagebox.askyesno("Confirmar", "Deseja realmente excluir este registro?"):
@@ -156,7 +238,7 @@ def limpar_tabela():
         messagebox.showerror("Erro", str(e))
 
     entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
+    entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
 
 
 def carregar_movimentacoes():
@@ -166,6 +248,7 @@ def carregar_movimentacoes():
     cursor.execute("SELECT id, placa, data, entrada, saida, valor, pago FROM movimentacoes ORDER BY id DESC")
     for row in cursor.fetchall():
         id_, placa, data, entrada, saida, valor, pago = row
+        placa = formatar_placa_exibicao(placa)
         tabela_mov.insert("", "end",
             values=(
                 id_, placa, data, entrada,
@@ -178,7 +261,7 @@ def carregar_movimentacoes():
 
 
 def registrar_entrada():
-    placa   = entrada_placa_mov.get().strip().upper()
+    placa = limpar_placa(entrada_placa_mov.get())
     data    = entrada_data.get().strip()
     hora_in = entrada_hora_in.get().strip()
 
@@ -203,9 +286,16 @@ def registrar_entrada():
 
 
 def registrar_saida():
-    placa    = entrada_placa_mov.get().strip().upper()
+    placa    = limpar_placa(entrada_placa_mov.get())
     hora_out = entrada_hora_out.get().strip()
 
+    cursor.execute("""
+    SELECT id, entrada FROM movimentacoes
+    WHERE REPLACE(placa, '-', '') = ?
+    AND saida IS NULL
+    ORDER BY id DESC LIMIT 1
+""", (placa,))
+    
     if not placa or not hora_out:
         messagebox.showwarning("Atenção", "Preencha a Placa e a Hora de Saída.")
         return
@@ -333,6 +423,7 @@ entrada_cpf = tk.Entry(aba_cadastroCliente, bg=BG2, fg=BRAN, insertbackground=BR
 entrada_cpf.grid(row=1, column=3, padx=5, pady=10, sticky="ew")
 
 entrada_placaVeiculo = tk.Entry(aba_cadastroCliente, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT)
+entrada_placaVeiculo.bind("<KeyRelease>", mascara_placa)
 entrada_placaVeiculo.grid(row=1, column=5, padx=5, pady=10, sticky="ew")
 
 frame_botoes_cad = tk.Frame(aba_cadastroCliente, bg=BG)
@@ -354,19 +445,23 @@ tk.Label(aba_movimentacao, text="MOVIMENTAÇÃO DE VAGAS", font=FONTH, bg=BG, fg
 
 tk.Label(aba_movimentacao, text="Placa", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=0, padx=(15,2), sticky="e")
 entrada_placa_mov = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=12)
+entrada_placa_mov.bind("<KeyRelease>", mascara_placa)
 entrada_placa_mov.grid(row=1, column=1, padx=5, pady=6, sticky="ew")
 
-tk.Label(aba_movimentacao, text="Data (AAAA-MM-DD)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=2, padx=(10,2), sticky="e")
+tk.Label(aba_movimentacao, text="Data (DD-MM-AAAA)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=2, padx=(10,2), sticky="e")
 entrada_data = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=14)
-entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
+entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
+entrada_data.bind("<KeyRelease>", formatar_data)
 entrada_data.grid(row=1, column=3, padx=5, pady=6, sticky="ew")
 
 tk.Label(aba_movimentacao, text="Hora Entrada (HH:MM)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=4, padx=(10,2), sticky="e")
 entrada_hora_in = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=8)
+entrada_hora_in.bind("<KeyRelease>", formatar_hora)
 entrada_hora_in.grid(row=1, column=5, padx=5, pady=6, sticky="ew")
 
 tk.Label(aba_movimentacao, text="Hora Saída (HH:MM)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=6, padx=(10,2), sticky="e")
 entrada_hora_out = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=8)
+entrada_hora_out.bind("<KeyRelease>", formatar_hora)
 entrada_hora_out.grid(row=1, column=7, padx=5, pady=6, sticky="ew")
 
 aba_movimentacao.columnconfigure((1, 3, 5, 7), weight=1)
@@ -470,10 +565,13 @@ tabela_rel_top_clientes.pack(fill="both", expand=True, padx=15, pady=15)
 
 # --- Carrega os dados ao iniciar ---
 abas.bind("<<NotebookTabChanged>>", ao_trocar_aba)
+
 carregar_movimentacoes()
 gerar_relatorio_clientes()
 gerar_relatorio_recebimentos()
 gerar_relatorio_recebimentos_abertos()
 gerar_relatorio_top_clientes()
+
+atualizar_hora()
 
 janela.mainloop()

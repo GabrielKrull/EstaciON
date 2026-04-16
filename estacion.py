@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
-from datetime import date
+from datetime import datetime, date
 import re
 import sqlite3
 
@@ -18,8 +17,6 @@ FONT  = ("Arial", 10)
 FONTB = ("Arial", 10, "bold")
 FONTH = ("Arial", 14, "bold")
 
-
-
 # BANCO DE DADOS
 conexao = sqlite3.connect("estacionamento.db")
 cursor = conexao.cursor()
@@ -28,8 +25,8 @@ cursor.executescript("""
 CREATE TABLE IF NOT EXISTS clientes (
     id    INTEGER PRIMARY KEY AUTOINCREMENT,
     nome  TEXT    NOT NULL,
-    cpf   TEXT    NOT NULL,
-    placa TEXT    NOT NULL UNIQUE
+    cpf   TEXT    NOT NULL UNIQUE,
+    placa TEXT    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS movimentacoes (
@@ -84,20 +81,17 @@ style.map("Treeview.Heading",
 abas = ttk.Notebook(janela)
 abas.pack(expand=True, fill="both", padx=10, pady=10)
 
-#Funções de Validação
-
+# Funções de Validação
 
 def validar_cpf(cpf):
-    cpf = re.sub(r'\D', '', cpf)  # remove tudo que não é número
+    cpf = re.sub(r'\D', '', cpf)
 
     if len(cpf) != 11 or cpf == cpf[0] * 11:
         return False
 
-    # Primeiro dígito
     soma = sum(int(cpf[i]) * (10 - i) for i in range(9))
     dig1 = (soma * 10 % 11) % 10
 
-    # Segundo dígito
     soma = sum(int(cpf[i]) * (11 - i) for i in range(10))
     dig2 = (soma * 10 % 11) % 10
 
@@ -111,7 +105,7 @@ def validar_placa(placa):
 
     return re.match(padrao_antigo, placa) or re.match(padrao_mercosul, placa)
 
-#Funções do sistema
+# Funções do sistema
 
 def salvar():
     nome = entrada_nomeCliente.get().strip()
@@ -119,38 +113,34 @@ def salvar():
     placa = entrada_placaVeiculo.get()
 
     if not validar_cpf(cpf):
-        messagebox.showerror("Erro", "CFP inválido")
+        messagebox.showerror("Erro", "CPF inválido")
         return
-    
+
     if not validar_placa(entrada_placaVeiculo.get()):
         messagebox.showerror("Erro", "Placa inválida")
-        
         return
-    
+
     cursor.execute("SELECT id FROM clientes WHERE cpf = ?", (cpf,))
     if cursor.fetchone():
         messagebox.showerror("Erro", "Este CPF já está cadastrado.")
         return
-    
-    if validar_cpf(cpf) and validar_placa(entrada_placaVeiculo.get()):
-        messagebox.showinfo("Sucesso", "Cliente registrado com sucesso")
 
     cursor.execute("""
-        INSERT INTO clientes (nome,cpf, placa)
-        VALUES (?,?,?)
-    """, (nome,cpf,placa))
-    
+        INSERT INTO clientes (nome, cpf, placa)
+        VALUES (?, ?, ?)
+    """, (nome, cpf, placa))
+
     conexao.commit()
+    messagebox.showinfo("Sucesso", "Cliente registrado com sucesso")
 
 
 def limpar_movimentacao():
     entrada_placa_mov.delete(0, tk.END)
     entrada_hora_in.delete(0, tk.END)
     entrada_hora_out.delete(0, tk.END)
-    
-    # Resetar data para hoje
+
     entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, datetime.now().strftime("%Y-%m"))
+    entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
 
 def limpar_tabela():
     selecionado = tabela_mov.selection()
@@ -177,11 +167,10 @@ def limpar_tabela():
         messagebox.showerror("Erro", str(e))
 
     entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, datetime.now().strftime("%Y-%m-%d"))
+    entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
 
 # --- FUNÇÃO PARA CARREGAR MOVIMENTAÇÕES NA TABELA ---
 def carregar_movimentacoes():
-    # Limpa a tabela antes de recarregar
     for item in tabela_mov.get_children():
         tabela_mov.delete(item)
 
@@ -195,7 +184,6 @@ def carregar_movimentacoes():
         valor_exib  = f"R$ {valor:.2f}" if valor else "—"
         pago_exib   = "✓" if pago else "✗"
 
-        # Tag de cor: vermelho se não pago, branco se pago
         tag = "nao_pago" if not pago else "pago"
 
         tabela_mov.insert("", "end",
@@ -212,7 +200,7 @@ def registrar_entrada():
     if not placa:
         messagebox.showwarning("Atenção", "Preencha a Placa.")
         return
-    
+
     if not hora_in:
         messagebox.showwarning("Atenção", "Preencha o Horário de entrada")
         return
@@ -238,7 +226,6 @@ def registrar_saida():
         messagebox.showwarning("Atenção", "Preencha a Placa e a Hora de Saída.")
         return
 
-    # Busca a última entrada em aberto para essa placa
     cursor.execute(
         "SELECT id, entrada FROM movimentacoes WHERE placa=? AND saida IS NULL ORDER BY id DESC LIMIT 1",
         (placa,)
@@ -251,7 +238,6 @@ def registrar_saida():
 
     mov_id, hora_in = row
 
-    # Calcula valor
     try:
         h_in,  m_in  = map(int, hora_in.split(":"))
         h_out, m_out = map(int, hora_out.split(":"))
@@ -295,13 +281,12 @@ entrada_cpf.grid(row=1, column=3, padx=5, pady=10, sticky="ew")
 entrada_placaVeiculo = tk.Entry(aba_cadastroCliente, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT)
 entrada_placaVeiculo.grid(row=1, column=5, padx=5, pady=10, sticky="ew")
 
-frame_botoes = tk.Frame(aba_cadastroCliente, bg=BG)
-frame_botoes.grid(row=2, column=0, columnspan=9, pady=30)
+frame_botoes_cad = tk.Frame(aba_cadastroCliente, bg=BG)
+frame_botoes_cad.grid(row=2, column=0, columnspan=9, pady=30)
 
-btn_entrada = tk.Button(frame_botoes, text="Registrar cliente", command=salvar ,bg=AZUL, fg=BRAN, font=FONTB, 
-                        relief="flat", width=18, cursor="hand2", activebackground=AZUL2, activeforeground=BRAN)
-
-btn_entrada.pack(side="left", padx=10)
+btn_registrar_cliente = tk.Button(frame_botoes_cad, text="Registrar cliente", command=salvar, bg=AZUL, fg=BRAN, font=FONTB,
+                                   relief="flat", width=18, cursor="hand2", activebackground=AZUL2, activeforeground=BRAN)
+btn_registrar_cliente.pack(side="left", padx=10)
 
 aba_cadastroCliente.columnconfigure((1, 3, 5), weight=1)
 
@@ -335,7 +320,6 @@ entrada_hora_out.grid(row=1, column=7, padx=5, pady=6, sticky="ew")
 aba_movimentacao.columnconfigure((1, 3, 5, 7), weight=1)
 
 # --- TABELA DE MOVIMENTAÇÕES (Treeview) ---
-
 frame_tabela = tk.Frame(aba_movimentacao, bg=BG, bd=1, relief="flat")
 frame_tabela.grid(row=3, column=0, columnspan=9, sticky="nsew", padx=15, pady=(0, 15))
 
@@ -344,17 +328,14 @@ aba_movimentacao.rowconfigure(3, weight=1)
 colunas = ("ID", "Placa", "Data", "Entrada", "Saída", "Valor", "Pago")
 tabela_mov = ttk.Treeview(frame_tabela, columns=colunas, show="headings", selectmode="browse")
 
-# Cabeçalhos e larguras
 larguras = {"ID": 50, "Placa": 100, "Data": 110, "Entrada": 80, "Saída": 80, "Valor": 90, "Pago": 60}
 for col in colunas:
     tabela_mov.heading(col, text=col)
     tabela_mov.column(col, width=larguras[col], anchor="center", minwidth=40)
 
-# Tags de cor para linhas
-tabela_mov.tag_configure("pago",    foreground=BRAN)
+tabela_mov.tag_configure("pago",     foreground=BRAN)
 tabela_mov.tag_configure("nao_pago", foreground=VERM)
 
-# Scrollbar vertical
 scrollbar_y = ttk.Scrollbar(frame_tabela, orient="vertical", command=tabela_mov.yview)
 tabela_mov.configure(yscrollcommand=scrollbar_y.set)
 
@@ -383,15 +364,39 @@ btn_limpar = tk.Button(frame_botoes, text="Limpar", bg=CINZA, fg=BG, font=FONTB,
 btn_limpar.pack(side="left", padx=10)
 
 
-
 # ===========================================================
-# --- ABAS FINANCEIRO E RELATÓRIO ---
+# --- ABA FINANCEIRO ---
 # ===========================================================
 aba_financeiro = tk.Frame(abas, bg=BG)
 abas.add(aba_financeiro, text="Financeiro ")
 
+
+# ===========================================================
+# --- ABA RELATÓRIOS ---
+# ===========================================================
 aba_relatorio = tk.Frame(abas, bg=BG)
 abas.add(aba_relatorio, text="Relatórios ")
+
+sub_notebook = ttk.Notebook(aba_relatorio)
+sub_notebook.pack(expand=True, fill="both")
+
+# Sub-aba clientes
+sub_aba_clientes = tk.Frame(sub_notebook)
+sub_notebook.add(sub_aba_clientes, text="Relatório Clientes")
+
+tk.Label(sub_aba_clientes, text="Aqui vai o relatório de clientes").pack(pady=20)
+
+# Sub-aba recebimentos
+sub_aba_recebimentos = tk.Frame(sub_notebook)
+sub_notebook.add(sub_aba_recebimentos, text="Recebimentos")
+
+# Sub-aba recebimentos aberto
+sub_aba_recebimentos_aberto = tk.Frame(sub_notebook)
+sub_notebook.add(sub_aba_recebimentos_aberto, text="Recebimentos em aberto")
+
+# Sub-aba top 5 clientes
+sub_aba_top = tk.Frame(sub_notebook)
+sub_notebook.add(sub_aba_top, text="Top 5 Clientes")
 
 # --- Carrega os dados ao iniciar ---
 carregar_movimentacoes()

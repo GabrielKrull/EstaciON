@@ -25,8 +25,8 @@ cursor.executescript("""
 CREATE TABLE IF NOT EXISTS clientes (
     id    INTEGER PRIMARY KEY AUTOINCREMENT,
     nome  TEXT    NOT NULL,
-    cpf   TEXT    NOT NULL UNIQUE,
-    placa TEXT    NOT NULL
+    cpf   TEXT    NOT NULL,
+    placa TEXT    NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS movimentacoes (
@@ -105,12 +105,107 @@ def validar_placa(placa):
 
     return re.match(padrao_antigo, placa) or re.match(padrao_mercosul, placa)
 
+def limpar_placa(placa):
+    return placa.upper().replace("-", "").strip()
+
+def formatar_placa_padrao(placa):
+    placa = limpar_placa(placa)
+
+    if len(placa) >= 7:
+        return placa[:3] + "-" + placa[3:7]
+
+    return placa
+
+def mascara_placa(event):
+    widget = event.widget
+
+    texto_original = widget.get()
+    pos_original = widget.index(tk.INSERT)
+
+    texto = texto_original.upper().replace("-", "")
+    texto = texto[:7]
+
+    # Detecta Mercosul (5º caractere é letra)
+    if len(texto) >= 5 and texto[4].isalpha():
+        novo = texto
+        tem_hifen = False
+    else:
+        if len(texto) > 3:
+            novo = texto[:3] + "-" + texto[3:]
+            tem_hifen = True
+        else:
+            novo = texto
+            tem_hifen = False
+
+    widget.delete(0, tk.END)
+    widget.insert(0, novo)
+
+    # --- Ajuste inteligente do cursor ---
+    nova_pos = pos_original
+
+    # Se adicionou hífen
+    if tem_hifen and pos_original == 4:
+        nova_pos += 1
+
+    # Se removeu hífen (Mercosul)
+    if not tem_hifen and "-" in texto_original and pos_original > 3:
+        nova_pos -= 1
+
+    try:
+        widget.icursor(nova_pos)
+    except:
+        pass
+
+def formatar_data(event):
+    texto = entrada_data.get().replace("/", "")[:8]
+
+    novo = ""
+    if len(texto) >= 4:
+        novo += texto[:4] + "/"
+        if len(texto) >= 6:
+            novo += texto[4:6] + "/"
+            novo += texto[6:8]
+        else:
+            novo += texto[4:6]
+    else:
+        novo = texto
+
+    entrada_data.delete(0, tk.END)
+    entrada_data.insert(0, novo)
+
+def formatar_data(event):
+    texto = entrada_data.get().replace("/", "")[:8]
+
+    novo = ""
+    if len(texto) >= 4:
+        novo += texto[:4] + "/"
+        if len(texto) >= 6:
+            novo += texto[4:6] + "/"
+            novo += texto[6:8]
+        else:
+            novo += texto[4:6]
+    else:
+        novo = texto
+
+    entrada_data.delete(0, tk.END)
+    entrada_data.insert(0, novo)
+
+def formatar_hora(event):
+    widget = event.widget
+    texto = widget.get().replace(":", "")[:4]
+
+    if len(texto) >= 3:
+        texto = texto[:2] + ":" + texto[2:]
+
+    widget.delete(0, tk.END)
+    widget.insert(0, texto)
+
 # Funções do sistema
 
 def salvar():
     nome = entrada_nomeCliente.get().strip()
     cpf = entrada_cpf.get().strip()
-    placa = entrada_placaVeiculo.get()
+    placa = limpar_placa(entrada_placaVeiculo.get())
 
     if not validar_cpf(cpf):
         messagebox.showerror("Erro", "CPF inválido")
@@ -119,28 +214,25 @@ def salvar():
     if not validar_placa(entrada_placaVeiculo.get()):
         messagebox.showerror("Erro", "Placa inválida")
         return
+    
+    try:
 
-    cursor.execute("SELECT id FROM clientes WHERE cpf = ?", (cpf,))
-    if cursor.fetchone():
-        messagebox.showerror("Erro", "Este CPF já está cadastrado.")
-        return
+        cursor.execute("""
+            INSERT INTO clientes (nome, cpf, placa)
+            VALUES (?, ?, ?)
+        """, (nome, cpf, placa))
 
-    cursor.execute("""
-        INSERT INTO clientes (nome, cpf, placa)
-        VALUES (?, ?, ?)
-    """, (nome, cpf, placa))
+        conexao.commit()
+        messagebox.showinfo("Sucesso", "Cliente registrado com sucesso")
 
-    conexao.commit()
-    messagebox.showinfo("Sucesso", "Cliente registrado com sucesso")
+    except sqlite3.IntegrityError:
+        messagebox.showerror("Erro", "Essa placa já está cadastrada no sistema.")
 
-
-def limpar_movimentacao():
-    entrada_placa_mov.delete(0, tk.END)
+def atualizar_hora():
+    agora = datetime.now().strftime("%H:%M")
     entrada_hora_in.delete(0, tk.END)
-    entrada_hora_out.delete(0, tk.END)
-
-    entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
+    entrada_hora_in.insert(0, agora)
+    janela.after(1000, atualizar_hora)  # atualiza a cada 1 segundo
 
 def limpar_tabela():
     selecionado = tabela_mov.selection()
@@ -166,9 +258,6 @@ def limpar_tabela():
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
-    entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
-
 # --- FUNÇÃO PARA CARREGAR MOVIMENTAÇÕES NA TABELA ---
 def carregar_movimentacoes():
     for item in tabela_mov.get_children():
@@ -193,7 +282,7 @@ def carregar_movimentacoes():
 
 # --- FUNÇÃO REGISTRAR ENTRADA ---
 def registrar_entrada():
-    placa = entrada_placa_mov.get().strip().upper()
+    placa = formatar_placa_padrao(entrada_placaVeiculo.get())
     data  = entrada_data.get().strip()
     hora_in = entrada_hora_in.get()
 
@@ -212,14 +301,13 @@ def registrar_entrada():
         )
         conexao.commit()
         messagebox.showinfo("Sucesso", f"Entrada registrada para {placa} às {hora_in}.")
-        limpar_movimentacao()
         carregar_movimentacoes()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
 # --- FUNÇÃO REGISTRAR SAÍDA ---
 def registrar_saida():
-    placa    = entrada_placa_mov.get().strip().upper()
+    placa = limpar_placa(entrada_placa_mov.get())
     hora_out = entrada_hora_out.get().strip()
 
     if not placa or not hora_out:
@@ -255,7 +343,6 @@ def registrar_saida():
         )
         conexao.commit()
         messagebox.showinfo("Sucesso", f"Saída registrada para {placa}. Valor: R$ {valor:.2f}")
-        limpar_movimentacao()
         carregar_movimentacoes()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
@@ -279,7 +366,9 @@ entrada_cpf = tk.Entry(aba_cadastroCliente, bg=BG2, fg=BRAN, insertbackground=BR
 entrada_cpf.grid(row=1, column=3, padx=5, pady=10, sticky="ew")
 
 entrada_placaVeiculo = tk.Entry(aba_cadastroCliente, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT)
+entrada_placaVeiculo.bind("<KeyRelease>", mascara_placa)
 entrada_placaVeiculo.grid(row=1, column=5, padx=5, pady=10, sticky="ew")
+
 
 frame_botoes_cad = tk.Frame(aba_cadastroCliente, bg=BG)
 frame_botoes_cad.grid(row=2, column=0, columnspan=9, pady=30)
@@ -302,20 +391,24 @@ tk.Label(aba_movimentacao, text="MOVIMENTAÇÃO DE VAGAS", font=FONTH, bg=BG, fg
 # --- Linha de inputs ---
 tk.Label(aba_movimentacao, text="Placa", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=0, padx=(15,2), sticky="e")
 entrada_placa_mov = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=12)
+entrada_placa_mov.bind("<KeyRelease>", mascara_placa)
 entrada_placa_mov.grid(row=1, column=1, padx=5, pady=6, sticky="ew")
 
 tk.Label(aba_movimentacao, text="Data (AAAA-MM-DD)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=2, padx=(10,2), sticky="e")
 entrada_data = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=14)
 entrada_data.insert(0, date.today().strftime("%Y-%m-%d"))
 entrada_data.grid(row=1, column=3, padx=5, pady=6, sticky="ew")
+entrada_data.bind("<KeyRelease>", formatar_data)
 
 tk.Label(aba_movimentacao, text="Hora Entrada (HH:MM)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=4, padx=(10,2), sticky="e")
 entrada_hora_in = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=8)
 entrada_hora_in.grid(row=1, column=5, padx=5, pady=6, sticky="ew")
+entrada_hora_in.bind("<KeyRelease>", formatar_hora)
 
 tk.Label(aba_movimentacao, text="Hora Saída (HH:MM)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=6, padx=(10,2), sticky="e")
 entrada_hora_out = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=8)
 entrada_hora_out.grid(row=1, column=7, padx=5, pady=6, sticky="ew")
+entrada_hora_out.bind("<KeyRelease>", formatar_hora)
 
 aba_movimentacao.columnconfigure((1, 3, 5, 7), weight=1)
 
@@ -398,7 +491,8 @@ sub_notebook.add(sub_aba_recebimentos_aberto, text="Recebimentos em aberto")
 sub_aba_top = tk.Frame(sub_notebook)
 sub_notebook.add(sub_aba_top, text="Top 5 Clientes")
 
-# --- Carrega os dados ao iniciar ---
+atualizar_hora()
+
 carregar_movimentacoes()
 
 janela.mainloop()

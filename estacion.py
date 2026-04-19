@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime, date
 import re
 import sqlite3
+import random
 
 # --- CONFIGURAÇÕES DE CORES E FONTES ---
 BG    = "#081122"
@@ -37,14 +38,25 @@ CREATE TABLE IF NOT EXISTS movimentacoes (
     saida   TEXT,
     valor   REAL    DEFAULT 0.0,
     pago    INTEGER DEFAULT 0,
+    vaga    INTEGER DEFAULT NULL,
     FOREIGN KEY (placa) REFERENCES clientes(placa)
 );
 """)
 conexao.commit()
 
+TOTAL_VAGAS = 20  # Total de vagas do estacionamento
+
+# Migração: garante que a coluna vaga existe em bancos antigos
+try:
+    cursor.execute("ALTER TABLE movimentacoes ADD COLUMN vaga INTEGER DEFAULT NULL")
+    conexao.commit()
+except Exception:
+    pass  # Coluna já existe
+conexao.commit()
+
 janela = tk.Tk()
 janela.title("estaciON")
-janela.geometry("900x580")
+janela.geometry("1280x720")
 janela.configure(bg=BG)
 
 # --- ESTILIZAÇÃO DO NOTEBOOK (ABAS) ---
@@ -272,15 +284,27 @@ def registrar_entrada():
         messagebox.showwarning("Atenção", "Preencha o Horário de entrada.")
         return
 
+    # Descobrir vagas ocupadas no momento
+    cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
+    vagas_ocupadas = {row[0] for row in cursor.fetchall()}
+    vagas_livres = [v for v in range(1, TOTAL_VAGAS + 1) if v not in vagas_ocupadas]
+
+    if not vagas_livres:
+        messagebox.showerror("Erro", "Não há vagas disponíveis no momento.")
+        return
+
+    vaga_escolhida = random.choice(vagas_livres)
+
     try:
         cursor.execute(
-            "INSERT INTO movimentacoes (placa, data, entrada) VALUES (?, ?, ?)",
-            (placa, data, hora_in)
+            "INSERT INTO movimentacoes (placa, data, entrada, vaga) VALUES (?, ?, ?, ?)",
+            (placa, data, hora_in, vaga_escolhida)
         )
         conexao.commit()
-        messagebox.showinfo("Sucesso", f"Entrada registrada para {placa} às {hora_in}.")
+        messagebox.showinfo("Sucesso", f"Entrada registrada para {placa} às {hora_in}.\nVaga alocada: {vaga_escolhida}")
         limpar_movimentacao()
         carregar_movimentacoes()
+        atualizar_mapa_vagas()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
@@ -329,6 +353,7 @@ def registrar_saida():
         messagebox.showinfo("Sucesso", f"Saída registrada para {placa}. Valor: R$ {valor:.2f}")
         limpar_movimentacao()
         carregar_movimentacoes()
+        atualizar_mapa_vagas()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
@@ -396,6 +421,17 @@ def gerar_relatorio_top_clientes():
         tabela_rel_top_clientes.insert("", "end", values=cliente)
 
 
+def atualizar_mapa_vagas():
+    """Atualiza as cores do mapa conforme vagas ocupadas no momento."""
+    cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
+    vagas_ocupadas = {row[0] for row in cursor.fetchall()}
+
+    for num_vaga, cell in _vaga_canvas.items():
+        cor = VERM if num_vaga in vagas_ocupadas else AZUL
+        cell.configure(bg=cor)
+
+
+# Chama ao trocar para a aba mapa
 def ao_trocar_aba(event):
     aba_selecionada = abas.tab(abas.select(), "text").strip()
     if aba_selecionada == "Relatórios":
@@ -403,7 +439,8 @@ def ao_trocar_aba(event):
         gerar_relatorio_recebimentos()
         gerar_relatorio_recebimentos_abertos()
         gerar_relatorio_top_clientes()
-
+    elif aba_selecionada == "Mapa de vagas":
+        atualizar_mapa_vagas()
 
 # ===========================================================
 # --- ABA CADASTRO DE CLIENTES ---
@@ -502,10 +539,66 @@ tk.Button(frame_botoes, text="Limpar", bg=CINZA, fg=BG, font=FONTB,
 
 
 # ===========================================================
-# --- ABA FINANCEIRO ---
+# --- ABA MAPA DE VAGAS ---
 # ===========================================================
-aba_financeiro = tk.Frame(abas, bg=BG)
-abas.add(aba_financeiro, text="Financeiro ")
+aba_mapa = tk.Frame(abas, bg=BG)
+abas.add(aba_mapa, text="Mapa de vagas")
+
+tk.Label(aba_mapa, text="MAPA DE VAGAS", font=FONTH, bg=BG, fg=AZUL).pack(pady=(18, 6))
+
+# Legenda
+frame_legenda = tk.Frame(aba_mapa, bg=BG)
+frame_legenda.pack(pady=(0, 10))
+
+tk.Canvas(frame_legenda, width=18, height=18, bg=AZUL, highlightthickness=0).pack(side="left", padx=(0, 4))
+tk.Label(frame_legenda, text="Livre", font=FONT, bg=BG, fg=BRAN).pack(side="left", padx=(0, 18))
+tk.Canvas(frame_legenda, width=18, height=18, bg=VERM, highlightthickness=0).pack(side="left", padx=(0, 4))
+tk.Label(frame_legenda, text="Ocupada", font=FONT, bg=BG, fg=BRAN).pack(side="left")
+
+# Frame para as seções de vagas
+frame_secoes = tk.Frame(aba_mapa, bg=BG)
+frame_secoes.pack(expand=True, fill="both", padx=30, pady=10)
+
+VAGAS_POR_SECAO = 10
+NUM_SECOES = TOTAL_VAGAS // VAGAS_POR_SECAO
+COLS_POR_SECAO = 5   # 5 colunas × 2 linhas = 10 vagas por seção
+CELL_W = 80
+CELL_H = 64
+PAD    = 10
+
+# Dicionário: vaga_num -> canvas widget (para atualizar cor)
+_vaga_canvas: dict = {}
+_vaga_label:  dict = {}
+
+for s in range(NUM_SECOES):
+    inicio = s * VAGAS_POR_SECAO + 1
+    fim    = inicio + VAGAS_POR_SECAO - 1
+
+    frame_sec = tk.Frame(frame_secoes, bg=BG2, bd=0, relief="flat")
+    frame_sec.pack(side="left", expand=True, fill="both", padx=12, pady=4)
+
+    tk.Label(frame_sec, text=f"Seção {s + 1}  (vagas {inicio}–{fim})",
+             font=FONTB, bg=BG2, fg=CINZA).grid(row=0, column=0, columnspan=COLS_POR_SECAO, pady=(10, 8))
+
+    for i in range(VAGAS_POR_SECAO):
+        num_vaga = inicio + i
+        row_grid = (i // COLS_POR_SECAO) + 1   # linha 1 ou 2
+        col_grid =  i  % COLS_POR_SECAO
+
+        cell = tk.Canvas(frame_sec, width=CELL_W, height=CELL_H,
+                         bg=AZUL, highlightthickness=0, cursor="arrow")
+        cell.grid(row=row_grid, column=col_grid, padx=PAD, pady=PAD)
+
+        lbl = cell.create_text(CELL_W // 2, CELL_H // 2,
+                               text=str(num_vaga),
+                               font=("Arial", 14, "bold"),
+                               fill=BRAN)
+
+        _vaga_canvas[num_vaga] = cell
+        _vaga_label[num_vaga]  = lbl
+
+    for c in range(COLS_POR_SECAO):
+        frame_sec.columnconfigure(c, weight=1)
 
 
 # ===========================================================
@@ -571,6 +664,7 @@ gerar_relatorio_clientes()
 gerar_relatorio_recebimentos()
 gerar_relatorio_recebimentos_abertos()
 gerar_relatorio_top_clientes()
+atualizar_mapa_vagas()
 
 atualizar_hora()
 

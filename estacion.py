@@ -3,7 +3,13 @@ from tkinter import ttk, messagebox
 from datetime import datetime, date
 import re
 import sqlite3
-import random
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+from tkinter import filedialog
 
 # --- CONFIGURAÇÕES DE CORES E FONTES ---
 BG    = "#081122"
@@ -38,25 +44,14 @@ CREATE TABLE IF NOT EXISTS movimentacoes (
     saida   TEXT,
     valor   REAL    DEFAULT 0.0,
     pago    INTEGER DEFAULT 0,
-    vaga    INTEGER DEFAULT NULL,
     FOREIGN KEY (placa) REFERENCES clientes(placa)
 );
 """)
 conexao.commit()
 
-TOTAL_VAGAS = 20  # Total de vagas do estacionamento
-
-# Migração: garante que a coluna vaga existe em bancos antigos
-try:
-    cursor.execute("ALTER TABLE movimentacoes ADD COLUMN vaga INTEGER DEFAULT NULL")
-    conexao.commit()
-except Exception:
-    pass  # Coluna já existe
-conexao.commit()
-
 janela = tk.Tk()
 janela.title("estaciON")
-janela.geometry("1280x720")
+janela.geometry("900x580")
 janela.configure(bg=BG)
 
 # --- ESTILIZAÇÃO DO NOTEBOOK (ABAS) ---
@@ -252,6 +247,11 @@ def limpar_tabela():
     entrada_data.delete(0, tk.END)
     entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
 
+    carregar_movimentacoes()
+    gerar_relatorio_clientes()
+    gerar_relatorio_recebimentos()
+    gerar_relatorio_recebimentos_abertos()
+    gerar_relatorio_top_clientes()
 
 def carregar_movimentacoes():
     for item in tabela_mov.get_children():
@@ -284,27 +284,15 @@ def registrar_entrada():
         messagebox.showwarning("Atenção", "Preencha o Horário de entrada.")
         return
 
-    # Descobrir vagas ocupadas no momento
-    cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
-    vagas_ocupadas = {row[0] for row in cursor.fetchall()}
-    vagas_livres = [v for v in range(1, TOTAL_VAGAS + 1) if v not in vagas_ocupadas]
-
-    if not vagas_livres:
-        messagebox.showerror("Erro", "Não há vagas disponíveis no momento.")
-        return
-
-    vaga_escolhida = random.choice(vagas_livres)
-
     try:
         cursor.execute(
-            "INSERT INTO movimentacoes (placa, data, entrada, vaga) VALUES (?, ?, ?, ?)",
-            (placa, data, hora_in, vaga_escolhida)
+            "INSERT INTO movimentacoes (placa, data, entrada) VALUES (?, ?, ?)",
+            (placa, data, hora_in)
         )
         conexao.commit()
-        messagebox.showinfo("Sucesso", f"Entrada registrada para {placa} às {hora_in}.\nVaga alocada: {vaga_escolhida}")
+        messagebox.showinfo("Sucesso", f"Entrada registrada para {placa} às {hora_in}.")
         limpar_movimentacao()
         carregar_movimentacoes()
-        atualizar_mapa_vagas()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
@@ -353,7 +341,6 @@ def registrar_saida():
         messagebox.showinfo("Sucesso", f"Saída registrada para {placa}. Valor: R$ {valor:.2f}")
         limpar_movimentacao()
         carregar_movimentacoes()
-        atualizar_mapa_vagas()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
@@ -421,17 +408,6 @@ def gerar_relatorio_top_clientes():
         tabela_rel_top_clientes.insert("", "end", values=cliente)
 
 
-def atualizar_mapa_vagas():
-    """Atualiza as cores do mapa conforme vagas ocupadas no momento."""
-    cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
-    vagas_ocupadas = {row[0] for row in cursor.fetchall()}
-
-    for num_vaga, cell in _vaga_canvas.items():
-        cor = VERM if num_vaga in vagas_ocupadas else AZUL
-        cell.configure(bg=cor)
-
-
-# Chama ao trocar para a aba mapa
 def ao_trocar_aba(event):
     aba_selecionada = abas.tab(abas.select(), "text").strip()
     if aba_selecionada == "Relatórios":
@@ -439,8 +415,8 @@ def ao_trocar_aba(event):
         gerar_relatorio_recebimentos()
         gerar_relatorio_recebimentos_abertos()
         gerar_relatorio_top_clientes()
-    elif aba_selecionada == "Mapa de vagas":
-        atualizar_mapa_vagas()
+
+
 
 # ===========================================================
 # --- ABA CADASTRO DE CLIENTES ---
@@ -539,66 +515,10 @@ tk.Button(frame_botoes, text="Limpar", bg=CINZA, fg=BG, font=FONTB,
 
 
 # ===========================================================
-# --- ABA MAPA DE VAGAS ---
+# --- ABA FINANCEIRO ---
 # ===========================================================
-aba_mapa = tk.Frame(abas, bg=BG)
-abas.add(aba_mapa, text="Mapa de vagas")
-
-tk.Label(aba_mapa, text="MAPA DE VAGAS", font=FONTH, bg=BG, fg=AZUL).pack(pady=(18, 6))
-
-# Legenda
-frame_legenda = tk.Frame(aba_mapa, bg=BG)
-frame_legenda.pack(pady=(0, 10))
-
-tk.Canvas(frame_legenda, width=18, height=18, bg=AZUL, highlightthickness=0).pack(side="left", padx=(0, 4))
-tk.Label(frame_legenda, text="Livre", font=FONT, bg=BG, fg=BRAN).pack(side="left", padx=(0, 18))
-tk.Canvas(frame_legenda, width=18, height=18, bg=VERM, highlightthickness=0).pack(side="left", padx=(0, 4))
-tk.Label(frame_legenda, text="Ocupada", font=FONT, bg=BG, fg=BRAN).pack(side="left")
-
-# Frame para as seções de vagas
-frame_secoes = tk.Frame(aba_mapa, bg=BG)
-frame_secoes.pack(expand=True, fill="both", padx=30, pady=10)
-
-VAGAS_POR_SECAO = 10
-NUM_SECOES = TOTAL_VAGAS // VAGAS_POR_SECAO
-COLS_POR_SECAO = 5   # 5 colunas × 2 linhas = 10 vagas por seção
-CELL_W = 80
-CELL_H = 64
-PAD    = 10
-
-# Dicionário: vaga_num -> canvas widget (para atualizar cor)
-_vaga_canvas: dict = {}
-_vaga_label:  dict = {}
-
-for s in range(NUM_SECOES):
-    inicio = s * VAGAS_POR_SECAO + 1
-    fim    = inicio + VAGAS_POR_SECAO - 1
-
-    frame_sec = tk.Frame(frame_secoes, bg=BG2, bd=0, relief="flat")
-    frame_sec.pack(side="left", expand=True, fill="both", padx=12, pady=4)
-
-    tk.Label(frame_sec, text=f"Seção {s + 1}  (vagas {inicio}–{fim})",
-             font=FONTB, bg=BG2, fg=CINZA).grid(row=0, column=0, columnspan=COLS_POR_SECAO, pady=(10, 8))
-
-    for i in range(VAGAS_POR_SECAO):
-        num_vaga = inicio + i
-        row_grid = (i // COLS_POR_SECAO) + 1   # linha 1 ou 2
-        col_grid =  i  % COLS_POR_SECAO
-
-        cell = tk.Canvas(frame_sec, width=CELL_W, height=CELL_H,
-                         bg=AZUL, highlightthickness=0, cursor="arrow")
-        cell.grid(row=row_grid, column=col_grid, padx=PAD, pady=PAD)
-
-        lbl = cell.create_text(CELL_W // 2, CELL_H // 2,
-                               text=str(num_vaga),
-                               font=("Arial", 14, "bold"),
-                               fill=BRAN)
-
-        _vaga_canvas[num_vaga] = cell
-        _vaga_label[num_vaga]  = lbl
-
-    for c in range(COLS_POR_SECAO):
-        frame_sec.columnconfigure(c, weight=1)
+aba_financeiro = tk.Frame(abas, bg=BG)
+abas.add(aba_financeiro, text="Financeiro ")
 
 
 # ===========================================================
@@ -610,6 +530,263 @@ abas.add(aba_relatorio, text="Relatórios ")
 sub_notebook = ttk.Notebook(aba_relatorio)
 sub_notebook.pack(expand=True, fill="both")
 
+
+
+
+# ===========================================================
+# --- TREM DE EXPORTAR PDF---
+# ===========================================================
+def _estilos_pdf():
+    """Retorna estilos padronizados para os PDFs."""
+    styles = getSampleStyleSheet()
+    titulo_style = ParagraphStyle(
+        'TituloEstaciON',
+        parent=styles['Title'],
+        fontSize=16,
+        textColor=colors.HexColor("#1565C0"),
+        spaceAfter=4,
+        alignment=TA_CENTER,
+    )
+    sub_style = ParagraphStyle(
+        'SubTituloEstaciON',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.grey,
+        spaceAfter=14,
+        alignment=TA_CENTER,
+    )
+    return titulo_style, sub_style
+
+
+def _estilo_tabela_pdf(num_cols):
+    """Retorna estilo visual padronizado para tabelas PDF."""
+    azul       = colors.HexColor("#1565C0")
+    cinza_linha = colors.HexColor("#F5F5F5")
+    return TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, 0), azul),
+        ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
+        ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0), (-1, 0), 10),
+        ('ALIGN',         (0, 0), (-1, 0), 'CENTER'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING',    (0, 0), (-1, 0), 8),
+        ('ROWBACKGROUNDS',(0, 1), (-1, -1), [colors.white, cinza_linha]),
+        ('FONTNAME',      (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 1), (-1, -1), 9),
+        ('ALIGN',         (0, 1), (-1, -1), 'CENTER'),
+        ('TOPPADDING',    (0, 1), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ('GRID',          (0, 0), (-1, -1), 0.5, colors.HexColor("#BDBDBD")),
+        ('LINEBELOW',     (0, 0), (-1, 0), 1.5, azul),
+    ])
+
+
+def _salvar_pdf(doc, story, titulo_relatorio):
+    """Constrói o PDF e exibe mensagem de sucesso."""
+    try:
+        doc.build(story)
+        messagebox.showinfo(
+            "PDF Gerado",
+            f"Relatório '{titulo_relatorio}' exportado com sucesso!\n\nArquivo: {doc.filename}"
+        )
+    except Exception as e:
+        messagebox.showerror("Erro ao gerar PDF", str(e))
+
+
+def _pedir_caminho(nome_sugerido):
+    """Abre diálogo para o usuário escolher onde salvar o PDF."""
+    return filedialog.asksaveasfilename(
+        defaultextension=".pdf",
+        filetypes=[("PDF", "*.pdf")],
+        initialfile=nome_sugerido,
+        title="Salvar relatório como..."
+    )
+
+
+def exportar_pdf_clientes():
+    caminho = _pedir_caminho(f"relatorio_clientes_{date.today()}.pdf")
+    if not caminho:
+        return
+
+    titulo_style, sub_style = _estilos_pdf()
+    doc = SimpleDocTemplate(caminho, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+    story.append(Paragraph("estaciON", titulo_style))
+    story.append(Paragraph(
+        f"Relatório de Clientes  •  Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        sub_style
+    ))
+
+    cursor.execute("SELECT nome, cpf, placa FROM clientes ORDER BY nome")
+    rows = cursor.fetchall()
+
+    if not rows:
+        story.append(Paragraph("Nenhum cliente cadastrado.", getSampleStyleSheet()['Normal']))
+    else:
+        dados = [["Nome", "CPF", "Placa"]]
+        for nome, cpf, placa in rows:
+            cpf_fmt = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else cpf
+            dados.append([nome, cpf_fmt, formatar_placa_exibicao(placa)])
+
+        tabela = Table(dados, colWidths=[8*cm, 5*cm, 4*cm], repeatRows=1)
+        tabela.setStyle(_estilo_tabela_pdf(3))
+        story.append(tabela)
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph(
+            f"Total de clientes: {len(rows)}",
+            ParagraphStyle('rodape', fontSize=9, textColor=colors.grey, alignment=TA_CENTER)
+        ))
+
+    _salvar_pdf(doc, story, "Relatório Clientes")
+
+
+def exportar_pdf_recebimentos():
+    caminho = _pedir_caminho(f"relatorio_recebimentos_{date.today()}.pdf")
+    if not caminho:
+        return
+
+    titulo_style, sub_style = _estilos_pdf()
+    doc = SimpleDocTemplate(caminho, pagesize=landscape(A4),
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+    story.append(Paragraph("estaciON", titulo_style))
+    story.append(Paragraph(
+        f"Relatório de Recebimentos  •  Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        sub_style
+    ))
+
+    cursor.execute("""
+        SELECT m.id, COALESCE(c.nome, '—'), m.placa, m.data, m.entrada, m.saida, m.valor
+        FROM movimentacoes m
+        LEFT JOIN clientes c ON UPPER(m.placa) = UPPER(c.placa)
+        WHERE m.pago = 1
+        ORDER BY m.data DESC
+    """)
+    rows = cursor.fetchall()
+
+    if not rows:
+        story.append(Paragraph("Nenhum recebimento encontrado.", getSampleStyleSheet()['Normal']))
+    else:
+        dados = [["ID", "Cliente", "Placa", "Data", "Entrada", "Saída", "Valor"]]
+        total = 0.0
+        for id_, nome, placa, data, entrada, saida, valor in rows:
+            total += valor or 0
+            dados.append([
+                str(id_), nome, formatar_placa_exibicao(placa), data,
+                entrada or "—", saida or "—",
+                f"R$ {valor:.2f}" if valor else "—"
+            ])
+        dados.append(["", "", "", "", "", "TOTAL:", f"R$ {total:.2f}"])
+
+        tabela = Table(dados, colWidths=[1.2*cm, 6*cm, 3*cm, 3*cm, 2.5*cm, 2.5*cm, 3*cm], repeatRows=1)
+        ts = _estilo_tabela_pdf(7)
+        ts.add('BACKGROUND', (0, len(dados)-1), (-1, len(dados)-1), colors.HexColor("#E3F2FD"))
+        ts.add('FONTNAME',   (0, len(dados)-1), (-1, len(dados)-1), 'Helvetica-Bold')
+        ts.add('LINEABOVE',  (0, len(dados)-1), (-1, len(dados)-1), 1, colors.HexColor("#1565C0"))
+        tabela.setStyle(ts)
+        story.append(tabela)
+
+    _salvar_pdf(doc, story, "Relatório Recebimentos")
+
+
+def exportar_pdf_abertos():
+    caminho = _pedir_caminho(f"relatorio_abertos_{date.today()}.pdf")
+    if not caminho:
+        return
+
+    titulo_style, sub_style = _estilos_pdf()
+    doc = SimpleDocTemplate(caminho, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+    story.append(Paragraph("estaciON", titulo_style))
+    story.append(Paragraph(
+        f"Recebimentos em Aberto  •  Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        sub_style
+    ))
+
+    cursor.execute("""
+        SELECT m.id, COALESCE(c.nome, 'Cliente não cadastrado'), m.placa, m.data, m.entrada
+        FROM movimentacoes m
+        LEFT JOIN clientes c ON UPPER(m.placa) = UPPER(c.placa)
+        WHERE m.pago = 0
+        ORDER BY m.data DESC
+    """)
+    rows = cursor.fetchall()
+
+    if not rows:
+        story.append(Paragraph("Nenhum recebimento em aberto.", getSampleStyleSheet()['Normal']))
+    else:
+        dados = [["ID", "Cliente", "Placa", "Data", "Entrada"]]
+        for id_, nome, placa, data, entrada in rows:
+            dados.append([str(id_), nome, formatar_placa_exibicao(placa), data, entrada or "—"])
+
+        tabela = Table(dados, colWidths=[1.5*cm, 7*cm, 3.5*cm, 3.5*cm, 3*cm], repeatRows=1)
+        ts = _estilo_tabela_pdf(5)
+        for i in range(1, len(dados)):
+            ts.add('TEXTCOLOR', (0, i), (-1, i), colors.HexColor("#B71C1C"))
+        tabela.setStyle(ts)
+        story.append(tabela)
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph(
+            f"Total em aberto: {len(rows)} registro(s)",
+            ParagraphStyle('rodape', fontSize=9, textColor=colors.HexColor("#C62828"), alignment=TA_CENTER)
+        ))
+
+    _salvar_pdf(doc, story, "Recebimentos em Aberto")
+
+
+def exportar_pdf_top_clientes():
+    caminho = _pedir_caminho(f"relatorio_top_clientes_{date.today()}.pdf")
+    if not caminho:
+        return
+
+    titulo_style, sub_style = _estilos_pdf()
+    doc = SimpleDocTemplate(caminho, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+    story.append(Paragraph("estaciON", titulo_style))
+    story.append(Paragraph(
+        f"Top 5 Clientes  •  Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        sub_style
+    ))
+
+    cursor.execute("""
+        SELECT c.nome, c.cpf, c.placa, COUNT(m.id) AS total_visitas
+        FROM clientes c
+        LEFT JOIN movimentacoes m ON UPPER(c.placa) = UPPER(m.placa)
+        GROUP BY c.id
+        ORDER BY total_visitas DESC
+        LIMIT 5
+    """)
+    rows = cursor.fetchall()
+
+    if not rows:
+        story.append(Paragraph("Nenhum dado disponível.", getSampleStyleSheet()['Normal']))
+    else:
+        medalhas = ["1o", "2o", "3o", "4o", "5o"]
+        dados = [["#", "Nome", "CPF", "Placa", "Visitas"]]
+        for i, (nome, cpf, placa, visitas) in enumerate(rows):
+            cpf_fmt = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else cpf
+            dados.append([medalhas[i], nome, cpf_fmt, formatar_placa_exibicao(placa), str(visitas)])
+
+        tabela = Table(dados, colWidths=[1.5*cm, 6.5*cm, 4*cm, 3*cm, 2.5*cm], repeatRows=1)
+        ts = _estilo_tabela_pdf(5)
+        if len(dados) > 1:
+            ts.add('BACKGROUND', (0, 1), (-1, 1), colors.HexColor("#FFF8E1"))
+            ts.add('FONTNAME',   (0, 1), (-1, 1), 'Helvetica-Bold')
+        tabela.setStyle(ts)
+        story.append(tabela)
+
+    _salvar_pdf(doc, story, "Top 5 Clientes")
+
+
+
+
 # Sub-aba clientes
 sub_aba_clientes = tk.Frame(sub_notebook)
 sub_notebook.add(sub_aba_clientes, text="Relatório Clientes")
@@ -619,6 +796,10 @@ for col in ("Nome", "CPF", "Placa"):
     tabela_rel_clientes.heading(col, text=col)
     tabela_rel_clientes.column(col, width=200, anchor="center")
 tabela_rel_clientes.pack(fill="both", expand=True, padx=15, pady=15)
+tk.Button(sub_aba_clientes, text="⬇  Exportar PDF", command=exportar_pdf_clientes,
+          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(0, 12))
 
 # Sub-aba recebimentos
 sub_aba_recebimentos = tk.Frame(sub_notebook)
@@ -631,6 +812,10 @@ for col in ("ID", "Cliente", "Placa", "Data", "Entrada", "Saída", "Valor"):
     tabela_rel_recebimentos.heading(col, text=col)
     tabela_rel_recebimentos.column(col, width=colunas_recebimentos[col], anchor="center")
 tabela_rel_recebimentos.pack(fill="both", expand=True, padx=15, pady=15)
+tk.Button(sub_aba_recebimentos, text="⬇  Exportar PDF", command=exportar_pdf_recebimentos,
+          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(0, 12))
 
 # Sub-aba recebimentos em aberto
 sub_aba_recebimentos_aberto = tk.Frame(sub_notebook)
@@ -643,6 +828,10 @@ for col in ("ID", "Cliente", "Placa", "Data", "Entrada"):
     tabela_rel_recebimentos_abertos.heading(col, text=col)
     tabela_rel_recebimentos_abertos.column(col, width=colunas_abertos[col], anchor="center")
 tabela_rel_recebimentos_abertos.pack(fill="both", expand=True, padx=15, pady=15)
+tk.Button(sub_aba_recebimentos_aberto, text="⬇  Exportar PDF", command=exportar_pdf_abertos,
+          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(0, 12))
 
 # Sub-aba top 5 clientes
 sub_aba_top = tk.Frame(sub_notebook)
@@ -654,7 +843,11 @@ colunas_top = {"Nome": 150, "CPF": 100, "Placa": 100, "Visitas": 80}
 for col in ("Nome", "CPF", "Placa", "Visitas"):
     tabela_rel_top_clientes.heading(col, text=col)
     tabela_rel_top_clientes.column(col, width=colunas_top[col], anchor="center")
-tabela_rel_top_clientes.pack(fill="both", expand=True, padx=15, pady=15)
+tabela_rel_top_clientes.pack(fill="both", expand=True, padx=15, pady=15) 
+tk.Button(sub_aba_top, text="⬇  Exportar PDF", command=exportar_pdf_top_clientes,
+          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(0, 12))
 
 # --- Carrega os dados ao iniciar ---
 abas.bind("<<NotebookTabChanged>>", ao_trocar_aba)
@@ -664,7 +857,6 @@ gerar_relatorio_clientes()
 gerar_relatorio_recebimentos()
 gerar_relatorio_recebimentos_abertos()
 gerar_relatorio_top_clientes()
-atualizar_mapa_vagas()
 
 atualizar_hora()
 

@@ -209,6 +209,41 @@ def salvar():
     entrada_nomeCliente.delete(0, tk.END)
     entrada_cpf.delete(0, tk.END)
     entrada_placaVeiculo.delete(0, tk.END)
+    carregar_tabela_clientes_cad()
+
+
+def excluir_cliente():
+    selecionado = tabela_clientes_cad.selection()
+    if not selecionado:
+        messagebox.showwarning("Atenção", "Selecione um cliente na lista para excluir.")
+        return
+
+    item   = tabela_clientes_cad.item(selecionado[0])
+    nome   = item["values"][0]
+    cpf    = re.sub(r'\D', '', str(item["values"][1]))
+    placa  = limpar_placa(str(item["values"][2]))
+
+    if not messagebox.askyesno("Confirmar exclusão",
+                               f"Deseja excluir o cliente '{nome}'?\n\nCPF: {item['values'][1]}\nPlaca: {item['values'][2]}\n\nAs movimentações vinculadas serão mantidas."):
+        return
+
+    try:
+        cursor.execute("DELETE FROM clientes WHERE cpf = ?", (cpf,))
+        conexao.commit()
+        messagebox.showinfo("Sucesso", f"Cliente '{nome}' excluído com sucesso.")
+        carregar_tabela_clientes_cad()
+    except Exception as e:
+        messagebox.showerror("Erro", str(e))
+
+
+def carregar_tabela_clientes_cad():
+    for item in tabela_clientes_cad.get_children():
+        tabela_clientes_cad.delete(item)
+    cursor.execute("SELECT nome, cpf, placa FROM clientes ORDER BY nome")
+    for row in cursor.fetchall():
+        nome, cpf, placa = row
+        cpf_fmt = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else cpf
+        tabela_clientes_cad.insert("", "end", values=(nome, cpf_fmt, formatar_placa_exibicao(placa)))
 
 
 def limpar_movimentacao():
@@ -695,10 +730,29 @@ entrada_placaVeiculo.bind("<KeyRelease>", mascara_placa)
 entrada_placaVeiculo.grid(row=1, column=5, padx=5, pady=10, sticky="ew")
 
 frame_botoes_cad = tk.Frame(aba_cadastroCliente, bg=BG)
-frame_botoes_cad.grid(row=2, column=0, columnspan=9, pady=30)
+frame_botoes_cad.grid(row=2, column=0, columnspan=9, pady=(10, 6))
 
 tk.Button(frame_botoes_cad, text="Registrar cliente", command=salvar, bg=AZUL, fg=BRAN, font=FONTB,
           relief="flat", width=18, cursor="hand2", activebackground=AZUL2, activeforeground=BRAN).pack(side="left", padx=10)
+
+tk.Button(frame_botoes_cad, text="Excluir cliente", command=excluir_cliente, bg=VERM, fg=BRAN, font=FONTB,
+          relief="flat", width=18, cursor="hand2", activebackground="#E53935", activeforeground=BRAN).pack(side="left", padx=10)
+
+# Tabela de clientes cadastrados
+frame_tabela_cad = tk.Frame(aba_cadastroCliente, bg=BG)
+frame_tabela_cad.grid(row=3, column=0, columnspan=9, sticky="nsew", padx=15, pady=(0, 15))
+aba_cadastroCliente.rowconfigure(3, weight=1)
+
+tabela_clientes_cad = ttk.Treeview(frame_tabela_cad,
+    columns=("Nome", "CPF", "Placa"), show="headings", selectmode="browse")
+for col, w in [("Nome", 250), ("CPF", 160), ("Placa", 120)]:
+    tabela_clientes_cad.heading(col, text=col)
+    tabela_clientes_cad.column(col, width=w, anchor="center", minwidth=60)
+
+scrollbar_cad = ttk.Scrollbar(frame_tabela_cad, orient="vertical", command=tabela_clientes_cad.yview)
+tabela_clientes_cad.configure(yscrollcommand=scrollbar_cad.set)
+tabela_clientes_cad.pack(side="left", fill="both", expand=True)
+scrollbar_cad.pack(side="right", fill="y")
 
 aba_cadastroCliente.columnconfigure((1, 3, 5), weight=1)
 
@@ -905,6 +959,7 @@ tk.Button(sub_aba_top, text="⬇  Exportar PDF", command=exportar_pdf_top_client
 abas.bind("<<NotebookTabChanged>>", ao_trocar_aba)
 
 carregar_movimentacoes()
+carregar_tabela_clientes_cad()
 gerar_relatorio_clientes()
 gerar_relatorio_recebimentos()
 gerar_relatorio_recebimentos_abertos()

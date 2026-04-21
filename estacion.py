@@ -90,6 +90,9 @@ style.map("Treeview.Heading",
 abas = ttk.Notebook(janela)
 abas.pack(expand=True, fill="both", padx=10, pady=10)
 
+style.configure("Sub.TNotebook", background=BG, borderwidth=0)
+style.configure("Sub.TNotebook.Tab", background=BG3, foreground=BRAN, padding=[10, 5], font=FONTB)
+style.map("Sub.TNotebook.Tab", background=[("selected", AZUL)], foreground=[("selected", BRAN)])
 
 # ===========================================================
 # --- FUNÇÕES DE VALIDAÇÃO ---
@@ -210,7 +213,7 @@ def salvar():
     entrada_cpf.delete(0, tk.END)
     entrada_placaVeiculo.delete(0, tk.END)
     carregar_tabela_clientes_cad()
-
+    carregar_cards_clientes()
 
 def excluir_cliente():
     selecionado = tabela_clientes_cad.selection()
@@ -305,8 +308,18 @@ def registrar_entrada():
     if not placa:
         messagebox.showwarning("Atenção", "Preencha a Placa.")
         return
+    if not validar_placa(placa):
+        messagebox.showerror("Erro", "Placa inválida. Use o formato ABC-1234 ou ABC1D23.")
+        return
     if not hora_in:
         messagebox.showwarning("Atenção", "Preencha o Horário de entrada.")
+        return
+
+    # ← Verifica se a placa pertence a um cliente cadastrado
+    cursor.execute("SELECT nome FROM clientes WHERE UPPER(placa) = UPPER(?)", (placa,))
+    cliente = cursor.fetchone()
+    if not cliente:
+        messagebox.showerror("Erro", f"A placa {formatar_placa_exibicao(placa)} não está vinculada a nenhum cliente cadastrado.\n\nCadastre o cliente antes de registrar a entrada.")
         return
 
     cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
@@ -325,7 +338,7 @@ def registrar_entrada():
             (placa, data, hora_in, vaga_escolhida)
         )
         conexao.commit()
-        messagebox.showinfo("Sucesso", f"Entrada registrada para {placa} às {hora_in}.\nVaga alocada: {vaga_escolhida}")
+        messagebox.showinfo("Sucesso", f"Entrada registrada para {formatar_placa_exibicao(placa)} ({cliente[0]}) às {hora_in}.\nVaga alocada: {vaga_escolhida}")
         limpar_movimentacao()
         carregar_movimentacoes()
         atualizar_mapa_vagas()
@@ -374,7 +387,164 @@ def registrar_saida():
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
+# ===========================================================
+# --- FUNÇÕES DA SUB-ABA CLIENTES REGISTRADOS ---
+# ===========================================================
 
+def carregar_cards_clientes():
+    for widget in frame_cards_inner.winfo_children():
+        widget.destroy()
+
+    cursor.execute("SELECT id, nome, cpf, placa FROM clientes ORDER BY nome")
+    clientes = cursor.fetchall()
+
+    if not clientes:
+        tk.Label(frame_cards_inner, text="Nenhum cliente cadastrado.",
+                 font=FONT, bg=BG, fg=CINZA).pack(pady=40)
+        return
+
+    for idx, (cid, nome, cpf, placa) in enumerate(clientes):
+        cpf_fmt   = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else cpf
+        placa_fmt = formatar_placa_exibicao(placa)
+        _criar_card(frame_cards_inner, cid, nome, cpf_fmt, placa_fmt)
+
+    frame_cards_inner.update_idletasks()
+    canvas_cards.configure(scrollregion=canvas_cards.bbox("all"))
+
+
+def _criar_card(parent, cid, nome, cpf_fmt, placa_fmt):
+    card = tk.Frame(parent, bg=BG2, bd=0, relief="flat",
+                    highlightbackground=AZUL, highlightthickness=1)
+    card.pack(fill="x", padx=20, pady=6)
+
+    # Coluna de ícone/inicial
+    frame_icon = tk.Frame(card, bg=AZUL, width=54)
+    frame_icon.pack(side="left", fill="y")
+    frame_icon.pack_propagate(False)
+    inicial = nome[0].upper() if nome else "?"
+    tk.Label(frame_icon, text=inicial, font=("Arial", 18, "bold"),
+             bg=AZUL, fg=BRAN).place(relx=0.5, rely=0.5, anchor="center")
+
+    # Coluna de dados
+    frame_dados = tk.Frame(card, bg=BG2)
+    frame_dados.pack(side="left", fill="both", expand=True, padx=14, pady=10)
+
+    tk.Label(frame_dados, text=nome, font=FONTB, bg=BG2, fg=BRAN,
+             anchor="w").grid(row=0, column=0, columnspan=4, sticky="w")
+
+    tk.Label(frame_dados, text="CPF:", font=FONT, bg=BG2, fg=CINZA).grid(row=1, column=0, sticky="w", pady=(4,0))
+    tk.Label(frame_dados, text=cpf_fmt, font=FONT, bg=BG2, fg=BRAN).grid(row=1, column=1, sticky="w", padx=(4,20), pady=(4,0))
+
+    tk.Label(frame_dados, text="Placa:", font=FONT, bg=BG2, fg=CINZA).grid(row=1, column=2, sticky="w", pady=(4,0))
+    tk.Label(frame_dados, text=placa_fmt, font=FONT, bg=BG2, fg=BRAN).grid(row=1, column=3, sticky="w", padx=(4,0), pady=(4,0))
+
+    # Botões
+    frame_btns = tk.Frame(card, bg=BG2)
+    frame_btns.pack(side="right", padx=12, pady=10)
+
+    tk.Button(frame_btns, text="✏  Editar",
+              bg=AZUL, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+              activebackground=AZUL2, activeforeground=BRAN, padx=10, pady=4,
+              command=lambda i=cid, n=nome, c=cpf_fmt, p=placa_fmt: abrir_modal_edicao(i, n, c, p)
+              ).pack(side="left", padx=(0, 6))
+
+    tk.Button(frame_btns, text="🗑  Excluir",
+              bg=VERM, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+              activebackground="#E53935", activeforeground=BRAN, padx=10, pady=4,
+              command=lambda i=cid, n=nome: excluir_cliente_card(i, n)
+              ).pack(side="left")
+
+
+def excluir_cliente_card(cid, nome):
+    if not messagebox.askyesno("Confirmar exclusão",
+                               f"Deseja excluir o cliente '{nome}'?\n\nAs movimentações vinculadas serão mantidas."):
+        return
+    try:
+        cursor.execute("DELETE FROM clientes WHERE id = ?", (cid,))
+        conexao.commit()
+        messagebox.showinfo("Sucesso", f"Cliente '{nome}' excluído com sucesso.")
+        carregar_cards_clientes()
+        carregar_tabela_clientes_cad()
+    except Exception as e:
+        messagebox.showerror("Erro", str(e))
+
+
+def abrir_modal_edicao(cid, nome, cpf_fmt, placa_fmt):
+    modal = tk.Toplevel(janela)
+    modal.title("Editar Cliente")
+    modal.configure(bg=BG)
+    modal.resizable(False, False)
+    modal.grab_set()
+
+    w, h = 420, 280
+    modal.geometry(f"{w}x{h}+{janela.winfo_x() + janela.winfo_width()//2 - w//2}"
+                   f"+{janela.winfo_y() + janela.winfo_height()//2 - h//2}")
+
+    tk.Label(modal, text="EDITAR CLIENTE", font=FONTH, bg=BG, fg=AZUL).pack(pady=(20, 14))
+
+    frame_form = tk.Frame(modal, bg=BG)
+    frame_form.pack(padx=30, fill="x")
+
+    campos = [("Nome", nome), ("CPF", cpf_fmt), ("Placa", placa_fmt)]
+    entries = {}
+
+    for i, (label, valor) in enumerate(campos):
+        tk.Label(frame_form, text=label + ":", font=FONTB, bg=BG, fg=BRAN).grid(
+            row=i, column=0, sticky="e", padx=(0, 10), pady=6)
+        e = tk.Entry(frame_form, bg=BG2, fg=BRAN, insertbackground=BRAN,
+                     borderwidth=0, font=FONT, width=28)
+        e.insert(0, valor)
+        e.grid(row=i, column=1, sticky="ew", pady=6, ipady=4)
+        if label == "Placa":
+            e.bind("<KeyRelease>", mascara_placa)
+        entries[label] = e
+
+    frame_form.columnconfigure(1, weight=1)
+
+    def salvar_edicao():
+        novo_nome  = entries["Nome"].get().strip()
+        novo_cpf   = re.sub(r'\D', '', entries["CPF"].get())
+        nova_placa = limpar_placa(entries["Placa"].get())
+
+        if not novo_nome:
+            messagebox.showerror("Erro", "Nome não pode ser vazio.", parent=modal)
+            return
+        if not validar_cpf(novo_cpf):
+            messagebox.showerror("Erro", "CPF inválido.", parent=modal)
+            return
+        if not validar_placa(nova_placa):
+            messagebox.showerror("Erro", "Placa inválida.", parent=modal)
+            return
+
+        # Verifica se CPF já existe em outro cliente
+        cursor.execute("SELECT id FROM clientes WHERE cpf = ? AND id != ?", (novo_cpf, cid))
+        if cursor.fetchone():
+            messagebox.showerror("Erro", "Este CPF já está cadastrado em outro cliente.", parent=modal)
+            return
+
+        try:
+            cursor.execute(
+                "UPDATE clientes SET nome=?, cpf=?, placa=? WHERE id=?",
+                (novo_nome, novo_cpf, nova_placa, cid)
+            )
+            conexao.commit()
+            messagebox.showinfo("Sucesso", "Cliente atualizado com sucesso!", parent=modal)
+            modal.destroy()
+            carregar_cards_clientes()
+            carregar_tabela_clientes_cad()
+        except Exception as e:
+            messagebox.showerror("Erro", str(e), parent=modal)
+
+    frame_btns = tk.Frame(modal, bg=BG)
+    frame_btns.pack(pady=18)
+
+    tk.Button(frame_btns, text="Salvar", command=salvar_edicao,
+              bg=AZUL, fg=BRAN, font=FONTB, relief="flat", width=14, cursor="hand2",
+              activebackground=AZUL2, activeforeground=BRAN).pack(side="left", padx=8)
+
+    tk.Button(frame_btns, text="Cancelar", command=modal.destroy,
+              bg=CINZA, fg=BG, font=FONTB, relief="flat", width=14, cursor="hand2").pack(side="left", padx=8)
+    
 # ===========================================================
 # --- FUNÇÕES DE RELATÓRIO ---
 # ===========================================================
@@ -440,6 +610,95 @@ def gerar_relatorio_top_clientes():
         tabela_rel_top_clientes.insert("", "end", values=cliente)
 
 
+def pesquisar_clientes_cadastrados(termo):
+    for widget in frame_cards_inner.winfo_children():
+        widget.destroy()
+
+    cursor.execute("SELECT id, nome, cpf, placa FROM clientes ORDER BY nome")
+    clientes = cursor.fetchall()
+    termo = termo.lower().strip()
+
+    encontrados = []
+    for cid, nome, cpf, placa in clientes:
+        cpf_fmt   = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else cpf
+        placa_fmt = formatar_placa_exibicao(placa)
+        if termo in nome.lower() or termo in cpf_fmt or termo in placa_fmt.lower():
+            encontrados.append((cid, nome, cpf_fmt, placa_fmt))
+
+    if not encontrados:
+        tk.Label(frame_cards_inner, text="Nenhum cliente encontrado.",
+                 font=FONT, bg=BG, fg=CINZA).pack(pady=40)
+    else:
+        for cid, nome, cpf_fmt, placa_fmt in encontrados:
+            _criar_card(frame_cards_inner, cid, nome, cpf_fmt, placa_fmt)
+
+    frame_cards_inner.update_idletasks()
+    canvas_cards.configure(scrollregion=canvas_cards.bbox("all"))
+
+
+def pesquisar_rel_clientes(termo):
+    for item in tabela_rel_clientes.get_children():
+        tabela_rel_clientes.delete(item)
+    cursor.execute("SELECT nome, cpf, placa FROM clientes ORDER BY nome")
+    termo = termo.lower().strip()
+    for nome, cpf, placa in cursor.fetchall():
+        cpf_fmt = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else cpf
+        if termo in nome.lower() or termo in cpf_fmt or termo in formatar_placa_exibicao(placa).lower():
+            tabela_rel_clientes.insert("", "end", values=(nome, cpf_fmt, formatar_placa_exibicao(placa)))
+
+
+def pesquisar_rel_recebimentos(termo):
+    for item in tabela_rel_recebimentos.get_children():
+        tabela_rel_recebimentos.delete(item)
+    cursor.execute("""
+        SELECT m.id, COALESCE(c.nome, '—'), m.placa, m.data, m.entrada, m.saida, m.valor
+        FROM movimentacoes m
+        LEFT JOIN clientes c ON UPPER(m.placa) = UPPER(c.placa)
+        WHERE m.pago = 1 ORDER BY m.data DESC
+    """)
+    termo = termo.lower().strip()
+    for id_, nome, placa, data, entrada, saida, valor in cursor.fetchall():
+        if (termo in str(id_) or termo in nome.lower() or termo in placa.lower()
+                or termo in data or termo in (entrada or "") or termo in (saida or "")):
+            tabela_rel_recebimentos.insert("", "end", values=(
+                id_, nome, formatar_placa_exibicao(placa), data,
+                entrada or "—", saida or "—",
+                f"R$ {valor:.2f}" if valor else "—"
+            ))
+
+
+def pesquisar_rel_abertos(termo):
+    for item in tabela_rel_recebimentos_abertos.get_children():
+        tabela_rel_recebimentos_abertos.delete(item)
+    cursor.execute("""
+        SELECT m.id, COALESCE(c.nome, 'Cliente não cadastrado'), m.placa, m.data, m.entrada
+        FROM movimentacoes m
+        LEFT JOIN clientes c ON UPPER(m.placa) = UPPER(c.placa)
+        WHERE m.pago = 0 ORDER BY m.data DESC
+    """)
+    termo = termo.lower().strip()
+    for id_, nome, placa, data, entrada in cursor.fetchall():
+        if termo in str(id_) or termo in nome.lower() or termo in placa.lower() or termo in data:
+            tabela_rel_recebimentos_abertos.insert("", "end", values=(
+                id_, nome, formatar_placa_exibicao(placa), data, entrada or "—"
+            ))
+
+
+def pesquisar_rel_top(termo):
+    for item in tabela_rel_top_clientes.get_children():
+        tabela_rel_top_clientes.delete(item)
+    cursor.execute("""
+        SELECT c.nome, c.cpf, c.placa, COUNT(m.id) AS total_visitas
+        FROM clientes c
+        LEFT JOIN movimentacoes m ON UPPER(c.placa) = UPPER(m.placa)
+        GROUP BY c.id ORDER BY total_visitas DESC LIMIT 5
+    """)
+    termo = termo.lower().strip()
+    for nome, cpf, placa, visitas in cursor.fetchall():
+        if termo in nome.lower() or termo in cpf or termo in placa.lower():
+            tabela_rel_top_clientes.insert("", "end", values=(nome, cpf, formatar_placa_exibicao(placa), visitas))
+
+
 def atualizar_mapa_vagas():
     cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
     vagas_ocupadas = {row[0] for row in cursor.fetchall()}
@@ -450,13 +709,49 @@ def atualizar_mapa_vagas():
 
 def ao_trocar_aba(event):
     aba_selecionada = abas.tab(abas.select(), "text").strip()
-    if aba_selecionada == "Relatórios":
+
+    if aba_selecionada == "Clientes":          # ← adicione este bloco
+        carregar_cards_clientes()
+    elif aba_selecionada == "Relatórios":
         gerar_relatorio_clientes()
         gerar_relatorio_recebimentos()
         gerar_relatorio_recebimentos_abertos()
         gerar_relatorio_top_clientes()
     elif aba_selecionada == "Mapa de vagas":
         atualizar_mapa_vagas()
+
+
+# ===========================================================
+# --- FUNÇÕES DE PESQUISA  ---
+# ===========================================================
+
+
+def criar_barra_pesquisa(parent, comando_pesquisa):
+    frame_search = tk.Frame(parent, bg=BG)
+    frame_search.pack(fill="x", padx=20, pady=(12, 4))
+
+    canvas_search = tk.Canvas(frame_search, bg=BG3, height=34,
+                               highlightthickness=1, highlightbackground=AZUL2, bd=0)
+    canvas_search.pack(fill="x")
+
+    frame_inner = tk.Frame(canvas_search, bg=BG3)
+    canvas_search.create_window(0, 0, anchor="nw", window=frame_inner,
+                                 width=canvas_search.winfo_reqwidth())
+
+    def _resize(event):
+        canvas_search.itemconfig(1, width=event.width)
+    canvas_search.bind("<Configure>", _resize)
+
+    tk.Label(frame_inner, text="🔍", bg=BG3, fg=CINZA, font=FONT).pack(side="left", padx=(10, 4))
+
+    var = tk.StringVar()
+    entry = tk.Entry(frame_inner, textvariable=var, bg=BG3, fg=BRAN,
+                     insertbackground=BRAN, borderwidth=0, font=FONT,
+                     relief="flat")
+    entry.pack(side="left", fill="x", expand=True, pady=6, padx=(0, 10))
+
+    var.trace_add("write", lambda *_: comando_pesquisa(var.get()))
+    return var
 
 
 # ===========================================================
@@ -709,10 +1004,24 @@ def exportar_pdf_top_clientes():
 
 
 # ===========================================================
-# --- ABA CADASTRO DE CLIENTES ---
+# --- ABA DE CLIENTES ---
 # ===========================================================
-aba_cadastroCliente = tk.Frame(abas, bg=BG)
-abas.add(aba_cadastroCliente, text="Clientes ")
+aba_clientes_principal = tk.Frame(abas, bg=BG)
+abas.add(aba_clientes_principal, text="Clientes ")
+
+style.configure("Sub.TNotebook", background=BG, borderwidth=0)
+style.configure("Sub.TNotebook.Tab", background=BG3, foreground=BRAN, padding=[10, 5], font=FONTB)
+style.map("Sub.TNotebook.Tab", background=[("selected", AZUL)], foreground=[("selected", BRAN)])
+style.layout("Sub.TNotebook", [("Sub.TNotebook.client", {"sticky": "nswe"})])
+
+sub_notebook_clientes = ttk.Notebook(aba_clientes_principal, style="Sub.TNotebook")
+sub_notebook_clientes.pack(expand=True, fill="both", padx=0, pady=10)
+
+
+#--- Sub-aba cadastro de clientes ---
+aba_cadastroCliente = tk.Frame(sub_notebook_clientes, bg=BG)
+sub_notebook_clientes.add(aba_cadastroCliente, text="Cadastro")
+
 
 tk.Label(aba_cadastroCliente, text="CADASTRO DE CLIENTES", font=FONTH, bg=BG, fg=AZUL).grid(row=0, column=0, columnspan=6, pady=20)
 
@@ -735,12 +1044,9 @@ frame_botoes_cad.grid(row=2, column=0, columnspan=9, pady=(10, 6))
 tk.Button(frame_botoes_cad, text="Registrar cliente", command=salvar, bg=AZUL, fg=BRAN, font=FONTB,
           relief="flat", width=18, cursor="hand2", activebackground=AZUL2, activeforeground=BRAN).pack(side="left", padx=10)
 
-tk.Button(frame_botoes_cad, text="Excluir cliente", command=excluir_cliente, bg=VERM, fg=BRAN, font=FONTB,
-          relief="flat", width=18, cursor="hand2", activebackground="#E53935", activeforeground=BRAN).pack(side="left", padx=10)
-
 # Tabela de clientes cadastrados
 frame_tabela_cad = tk.Frame(aba_cadastroCliente, bg=BG)
-frame_tabela_cad.grid(row=3, column=0, columnspan=9, sticky="nsew", padx=15, pady=(0, 15))
+frame_tabela_cad.grid(row=3, column=0, columnspan=9, sticky="nsew", padx=15, pady=(10, 15))
 aba_cadastroCliente.rowconfigure(3, weight=1)
 
 tabela_clientes_cad = ttk.Treeview(frame_tabela_cad,
@@ -756,6 +1062,50 @@ scrollbar_cad.pack(side="right", fill="y")
 
 aba_cadastroCliente.columnconfigure((1, 3, 5), weight=1)
 
+# --- Sub-aba Clientes Cadastrados ---
+
+'''scrollbar_cards = ttk.Scrollbar(aba_clientes_lista, orient="vertical", command=canvas_cards.yview)
+canvas_cards.configure(yscrollcommand=scrollbar_cards.set)
+
+scrollbar_cards.pack(side="right", fill="y")
+canvas_cards.pack(side="left", fill="both", expand=True)
+
+frame_cards_inner = tk.Frame(canvas_cards, bg=BG)
+canvas_cards.create_window((0, 0), window=frame_cards_inner, anchor="nw") '''
+
+aba_clientes_lista = tk.Frame(sub_notebook_clientes, bg=BG)
+sub_notebook_clientes.add(aba_clientes_lista, text="Clientes Cadastrados")
+
+criar_barra_pesquisa(aba_clientes_lista, pesquisar_clientes_cadastrados)
+
+frame_scroll_lista = tk.Frame(aba_clientes_lista, bg=BG)
+frame_scroll_lista.pack(fill="both", expand=True)
+
+canvas_cards = tk.Canvas(frame_scroll_lista, bg=BG, highlightthickness=0, bd=0)
+scrollbar_cards = ttk.Scrollbar(frame_scroll_lista, orient="vertical", command=canvas_cards.yview)
+canvas_cards.configure(yscrollcommand=scrollbar_cards.set)
+
+scrollbar_cards.pack(side="right", fill="y")
+canvas_cards.pack(side="left", fill="both", expand=True)
+
+frame_cards_inner = tk.Frame(canvas_cards, bg=BG)
+canvas_cards.create_window((0, 0), window=frame_cards_inner, anchor="nw")
+
+def _on_resize_cards(event):
+    canvas_cards.itemconfig(1, width=event.width)
+canvas_cards.bind("<Configure>", _on_resize_cards)
+
+def _scroll_mouse(event):
+    canvas_cards.yview_scroll(int(-1 * (event.delta / 120)), "units")
+canvas_cards.bind_all("<MouseWheel>", _scroll_mouse)
+
+def _on_resize_cards(event):
+    canvas_cards.itemconfig(1, width=event.width)
+canvas_cards.bind("<Configure>", _on_resize_cards)
+
+def _scroll_mouse(event):
+    canvas_cards.yview_scroll(int(-1 * (event.delta / 120)), "units")
+canvas_cards.bind_all("<MouseWheel>", _scroll_mouse)
 
 # ===========================================================
 # --- ABA MOVIMENTAÇÃO ---
@@ -789,7 +1139,7 @@ entrada_hora_out.grid(row=1, column=7, padx=5, pady=6, sticky="ew")
 aba_movimentacao.columnconfigure((1, 3, 5, 7), weight=1)
 
 frame_tabela = tk.Frame(aba_movimentacao, bg=BG, bd=1, relief="flat")
-frame_tabela.grid(row=3, column=0, columnspan=9, sticky="nsew", padx=15, pady=(0, 15))
+frame_tabela.grid(row=3, column=0, columnspan=9, sticky="nsew", padx=15, pady=(10, 15))
 aba_movimentacao.rowconfigure(3, weight=1)
 
 colunas = ("ID", "Placa", "Data", "Entrada", "Saída", "Valor", "Pago")
@@ -889,71 +1239,106 @@ for s in range(NUM_SECOES):
 aba_relatorio = tk.Frame(abas, bg=BG)
 abas.add(aba_relatorio, text="Relatórios ")
 
-sub_notebook = ttk.Notebook(aba_relatorio)
-sub_notebook.pack(expand=True, fill="both")
+sub_notebook = ttk.Notebook(aba_relatorio, style="Sub.TNotebook")
+sub_notebook.pack(expand=True, fill="both", padx=10, pady=10)
 
-# Sub-aba clientes
-sub_aba_clientes = tk.Frame(sub_notebook)
+# --- Sub-aba Relatório Clientes ---
+sub_aba_clientes = tk.Frame(sub_notebook, bg=BG)
 sub_notebook.add(sub_aba_clientes, text="Relatório Clientes")
 
-tabela_rel_clientes = ttk.Treeview(sub_aba_clientes, columns=("Nome", "CPF", "Placa"), show="headings")
+criar_barra_pesquisa(sub_aba_clientes, pesquisar_rel_clientes)
+
+frame_tree_rel_cli = tk.Frame(sub_aba_clientes, bg=BG)
+frame_tree_rel_cli.pack(fill="both", expand=True, padx=15, pady=(4, 4))
+
+tabela_rel_clientes = ttk.Treeview(frame_tree_rel_cli, columns=("Nome", "CPF", "Placa"), show="headings")
 for col in ("Nome", "CPF", "Placa"):
     tabela_rel_clientes.heading(col, text=col)
     tabela_rel_clientes.column(col, width=200, anchor="center")
-tabela_rel_clientes.pack(fill="both", expand=True, padx=15, pady=15)
-tk.Button(sub_aba_clientes, text="⬇  Exportar PDF", command=exportar_pdf_clientes,
-          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
-          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
-          ).pack(pady=(0, 12))
+scroll_rel_cli = ttk.Scrollbar(frame_tree_rel_cli, orient="vertical", command=tabela_rel_clientes.yview)
+tabela_rel_clientes.configure(yscrollcommand=scroll_rel_cli.set)
+tabela_rel_clientes.pack(side="left", fill="both", expand=True)
+scroll_rel_cli.pack(side="right", fill="y")
 
-# Sub-aba recebimentos
-sub_aba_recebimentos = tk.Frame(sub_notebook)
+tk.Button(sub_aba_clientes, text="⬇  Exportar PDF", command=exportar_pdf_clientes,
+          bg= AZUL2, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground=AZUL2, activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(4, 12))
+
+# --- Sub-aba Recebimentos ---
+sub_aba_recebimentos = tk.Frame(sub_notebook, bg=BG)
 sub_notebook.add(sub_aba_recebimentos, text="Recebimentos")
 
-tabela_rel_recebimentos = ttk.Treeview(sub_aba_recebimentos,
+criar_barra_pesquisa(sub_aba_recebimentos, pesquisar_rel_recebimentos)
+
+frame_tree_rec = tk.Frame(sub_aba_recebimentos, bg=BG)
+frame_tree_rec.pack(fill="both", expand=True, padx=15, pady=(4, 4))
+
+tabela_rel_recebimentos = ttk.Treeview(frame_tree_rec,
     columns=("ID", "Cliente", "Placa", "Data", "Entrada", "Saída", "Valor"), show="headings")
 colunas_recebimentos = {"ID": 50, "Cliente": 150, "Placa": 100, "Data": 110, "Entrada": 80, "Saída": 80, "Valor": 90}
 for col in ("ID", "Cliente", "Placa", "Data", "Entrada", "Saída", "Valor"):
     tabela_rel_recebimentos.heading(col, text=col)
     tabela_rel_recebimentos.column(col, width=colunas_recebimentos[col], anchor="center")
-tabela_rel_recebimentos.pack(fill="both", expand=True, padx=15, pady=15)
-tk.Button(sub_aba_recebimentos, text="⬇  Exportar PDF", command=exportar_pdf_recebimentos,
-          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
-          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
-          ).pack(pady=(0, 12))
+scroll_rec = ttk.Scrollbar(frame_tree_rec, orient="vertical", command=tabela_rel_recebimentos.yview)
+tabela_rel_recebimentos.configure(yscrollcommand=scroll_rec.set)
+tabela_rel_recebimentos.pack(side="left", fill="both", expand=True)
+scroll_rec.pack(side="right", fill="y")
 
-# Sub-aba recebimentos em aberto
-sub_aba_recebimentos_aberto = tk.Frame(sub_notebook)
+tk.Button(sub_aba_recebimentos, text="⬇  Exportar PDF", command=exportar_pdf_recebimentos,
+          bg=AZUL2, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground=AZUL2, activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(4, 12))
+
+# --- Sub-aba Recebimentos em Aberto ---
+sub_aba_recebimentos_aberto = tk.Frame(sub_notebook, bg=BG)
 sub_notebook.add(sub_aba_recebimentos_aberto, text="Recebimentos em aberto")
 
-tabela_rel_recebimentos_abertos = ttk.Treeview(sub_aba_recebimentos_aberto,
+criar_barra_pesquisa(sub_aba_recebimentos_aberto, pesquisar_rel_abertos)
+
+frame_tree_aberto = tk.Frame(sub_aba_recebimentos_aberto, bg=BG)
+frame_tree_aberto.pack(fill="both", expand=True, padx=15, pady=(4, 4))
+
+tabela_rel_recebimentos_abertos = ttk.Treeview(frame_tree_aberto,
     columns=("ID", "Cliente", "Placa", "Data", "Entrada"), show="headings")
 colunas_abertos = {"ID": 50, "Cliente": 150, "Placa": 100, "Data": 110, "Entrada": 80}
 for col in ("ID", "Cliente", "Placa", "Data", "Entrada"):
     tabela_rel_recebimentos_abertos.heading(col, text=col)
     tabela_rel_recebimentos_abertos.column(col, width=colunas_abertos[col], anchor="center")
-tabela_rel_recebimentos_abertos.pack(fill="both", expand=True, padx=15, pady=15)
-tk.Button(sub_aba_recebimentos_aberto, text="⬇  Exportar PDF", command=exportar_pdf_abertos,
-          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
-          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
-          ).pack(pady=(0, 12))
+scroll_aberto = ttk.Scrollbar(frame_tree_aberto, orient="vertical", command=tabela_rel_recebimentos_abertos.yview)
+tabela_rel_recebimentos_abertos.configure(yscrollcommand=scroll_aberto.set)
+tabela_rel_recebimentos_abertos.pack(side="left", fill="both", expand=True)
+scroll_aberto.pack(side="right", fill="y")
 
-# Sub-aba top 5 clientes
-sub_aba_top = tk.Frame(sub_notebook)
+tk.Button(sub_aba_recebimentos_aberto, text="⬇  Exportar PDF", command=exportar_pdf_abertos,
+          bg= AZUL2, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground=AZUL2, activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(4, 12))
+
+# --- Sub-aba Top 5 Clientes ---
+sub_aba_top = tk.Frame(sub_notebook, bg=BG)
 sub_notebook.add(sub_aba_top, text="Top 5 Clientes")
 
-tabela_rel_top_clientes = ttk.Treeview(sub_aba_top,
+criar_barra_pesquisa(sub_aba_top, pesquisar_rel_top)
+
+frame_tree_top = tk.Frame(sub_aba_top, bg=BG)
+frame_tree_top.pack(fill="both", expand=True, padx=15, pady=(4, 4))
+
+tabela_rel_top_clientes = ttk.Treeview(frame_tree_top,
     columns=("Nome", "CPF", "Placa", "Visitas"), show="headings")
 colunas_top = {"Nome": 150, "CPF": 100, "Placa": 100, "Visitas": 80}
 for col in ("Nome", "CPF", "Placa", "Visitas"):
     tabela_rel_top_clientes.heading(col, text=col)
     tabela_rel_top_clientes.column(col, width=colunas_top[col], anchor="center")
-tabela_rel_top_clientes.pack(fill="both", expand=True, padx=15, pady=15)
-tk.Button(sub_aba_top, text="⬇  Exportar PDF", command=exportar_pdf_top_clientes,
-          bg="#2E7D32", fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
-          activebackground="#388E3C", activeforeground=BRAN, padx=16, pady=6
-          ).pack(pady=(0, 12))
+scroll_top = ttk.Scrollbar(frame_tree_top, orient="vertical", command=tabela_rel_top_clientes.yview)
+tabela_rel_top_clientes.configure(yscrollcommand=scroll_top.set)
+tabela_rel_top_clientes.pack(side="left", fill="both", expand=True)
+scroll_top.pack(side="right", fill="y")
 
+tk.Button(sub_aba_top, text="⬇  Exportar PDF", command=exportar_pdf_top_clientes,
+          bg=AZUL2, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground=AZUL2, activeforeground=BRAN, padx=16, pady=6
+          ).pack(pady=(4, 12))
 
 # --- Inicialização ---
 abas.bind("<<NotebookTabChanged>>", ao_trocar_aba)
@@ -966,5 +1351,6 @@ gerar_relatorio_recebimentos_abertos()
 gerar_relatorio_top_clientes()
 atualizar_mapa_vagas()
 atualizar_hora()
+carregar_cards_clientes()
 
 janela.mainloop()

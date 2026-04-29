@@ -78,6 +78,7 @@ TOTAL_VAGAS = 20
 for migration in [
     "ALTER TABLE movimentacoes ADD COLUMN vaga INTEGER DEFAULT NULL",
     "ALTER TABLE clientes ADD COLUMN tipo TEXT NOT NULL DEFAULT 'rotativo'",
+    "ALTER TABLE contratos ADD COLUMN vaga INTEGER DEFAULT NULL",
 ]:
     try:
         cursor.execute(migration)
@@ -97,6 +98,66 @@ def get_config():
                 "valor_mensalista": row[3], "limite_rotativo_horas": row[4]}
     return {"unidade": "hora", "valor_rotativo": 5.0, "valor_diarista": 30.0,
             "valor_mensalista": 200.0, "limite_rotativo_horas": 12}
+
+# ===========================================================
+# --- LOGICA DE OCUPACAO DE VAGAS (FONTE UNICA DE VERDADE) ---
+# ===========================================================
+
+def _parse_data(texto):
+    """Converte 'DD/MM/YYYY' para date. Retorna None se invalido."""
+    try:
+        return datetime.strptime(texto.strip(), "%d/%m/%Y").date()
+    except (ValueError, AttributeError):
+        return None
+
+def vagas_ocupadas_hoje():
+    """
+    Retorna um set com os numeros das vagas ocupadas AGORA.
+    - Rotativo  : movimentacao com saida IS NULL e vaga atribuida.
+    - Diarista  : contrato ativo com data_inicio == hoje e vaga atribuida.
+    - Mensalista: contrato ativo cujo periodo engloba hoje e vaga atribuida.
+    """
+    hoje = date.today()
+    hoje_str = hoje.strftime("%d/%m/%Y")
+    ocupadas = set()
+
+    # Rotativos em aberto
+    cursor.execute(
+        "SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL"
+    )
+    for (v,) in cursor.fetchall():
+        ocupadas.add(v)
+
+    # Diaristas com contrato para hoje
+    cursor.execute(
+        "SELECT vaga FROM contratos "
+        "WHERE tipo='diarista' AND ativo=1 AND vaga IS NOT NULL AND data_inicio=?",
+        (hoje_str,)
+    )
+    for (v,) in cursor.fetchall():
+        ocupadas.add(v)
+
+    # Mensalistas com contrato ativo que engloba hoje
+    cursor.execute(
+        "SELECT vaga, data_inicio, data_fim FROM contratos "
+        "WHERE tipo='mensalista' AND ativo=1 AND vaga IS NOT NULL"
+    )
+    for vaga, di_str, df_str in cursor.fetchall():
+        di = _parse_data(di_str)
+        df = _parse_data(df_str) if df_str else None
+        if di is None:
+            continue
+        if di <= hoje and (df is None or df >= hoje):
+            ocupadas.add(vaga)
+
+    return ocupadas
+
+
+def proxima_vaga_livre():
+    """Retorna um numero de vaga livre aleatorio, ou None se lotado."""
+    ocupadas = vagas_ocupadas_hoje()
+    livres = [v for v in range(1, TOTAL_VAGAS + 1) if v not in ocupadas]
+    return random.choice(livres) if livres else None
 
 # --- JANELA PRINCIPAL ---
 janela = tk.Tk()
@@ -193,12 +254,10 @@ def mascara_placa(event):
 
 def formatar_data(event):
     texto = entrada_data.get().replace("/", "")[:8]
-    if len(texto) >= 4:
-        novo = texto[:4] + "/"
-        if len(texto) >= 6:
-            novo += texto[4:6] + "/" + texto[6:8]
-        else:
-            novo += texto[4:6]
+    if len(texto) >= 5:
+        novo = texto[:2] + "/" + texto[2:4] + "/" + texto[4:8]
+    elif len(texto) >= 3:
+        novo = texto[:2] + "/" + texto[2:]
     else:
         novo = texto
     entrada_data.delete(0, tk.END)
@@ -303,7 +362,7 @@ def limpar_movimentacao():
     entrada_hora_in.delete(0, tk.END)
     entrada_hora_out.delete(0, tk.END)
     entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
+    entrada_data.insert(0, date.today().strftime("%d/%m/%Y"))
 
 def limpar_tabela():
     selecionado = tabela_mov.selection()
@@ -322,7 +381,7 @@ def limpar_tabela():
     except Exception as e:
         messagebox.showerror("Erro", str(e))
     entrada_data.delete(0, tk.END)
-    entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
+    entrada_data.insert(0, date.today().strftime("%d/%m/%Y"))
 
 def carregar_movimentacoes():
     for item in tabela_mov.get_children():
@@ -367,15 +426,10 @@ def registrar_entrada():
         messagebox.showerror("Erro", f"O cliente '{nome_cliente}' é do tipo '{tipo_cliente.capitalize()}'. Use a aba de Contratos para registrar movimentação.")
         return
 
-    cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
-    vagas_ocupadas = {row[0] for row in cursor.fetchall()}
-    vagas_livres = [v for v in range(1, TOTAL_VAGAS + 1) if v not in vagas_ocupadas]
-
-    if not vagas_livres:
+    vaga_escolhida = proxima_vaga_livre()
+    if vaga_escolhida is None:
         messagebox.showerror("Erro", "Não há vagas disponíveis no momento.")
         return
-
-    vaga_escolhida = random.choice(vagas_livres)
 
     try:
         cursor.execute(
@@ -727,10 +781,9 @@ def pesquisar_rel_top(termo):
             tabela_rel_top_clientes.insert("", "end", values=(nome, cpf, formatar_placa_exibicao(placa), visitas))
 
 def atualizar_mapa_vagas():
-    cursor.execute("SELECT vaga FROM movimentacoes WHERE saida IS NULL AND vaga IS NOT NULL")
-    vagas_ocupadas = {row[0] for row in cursor.fetchall()}
+    ocupadas = vagas_ocupadas_hoje()
     for num_vaga, cell in _vaga_canvas.items():
-        cor = VERM if num_vaga in vagas_ocupadas else AZUL
+        cor = VERM if num_vaga in ocupadas else AZUL
         cell.configure(bg=cor)
 
 def ao_trocar_aba(event):
@@ -1044,9 +1097,9 @@ entrada_placa_mov = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground
 entrada_placa_mov.bind("<KeyRelease>", mascara_placa)
 entrada_placa_mov.grid(row=1, column=1, padx=5, pady=6, sticky="ew")
 
-tk.Label(aba_movimentacao, text="Data (DD-MM-AAAA)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=2, padx=(10,2), sticky="e")
+tk.Label(aba_movimentacao, text="Data (DD/MM/AAAA)", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=2, padx=(10,2), sticky="e")
 entrada_data = tk.Entry(aba_movimentacao, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=14)
-entrada_data.insert(0, date.today().strftime("%d-%m-%Y"))
+entrada_data.insert(0, date.today().strftime("%d/%m/%Y"))
 entrada_data.bind("<KeyRelease>", formatar_data)
 entrada_data.grid(row=1, column=3, padx=5, pady=6, sticky="ew")
 
@@ -1155,17 +1208,26 @@ def registrar_diarista():
         return
 
     try:
+        vaga = proxima_vaga_livre()
+        if vaga is None:
+            if not messagebox.askyesno(
+                "Sem vagas livres",
+                "Não há vagas disponíveis hoje.\nDeseja registrar o contrato mesmo assim (sem vaga alocada)?"
+            ):
+                return
         cursor.execute(
-            "INSERT INTO contratos (placa, tipo, data_inicio, valor, pago, ativo) VALUES (?, 'diarista', ?, ?, 1, 1)",
-            (placa, data, valor)
+            "INSERT INTO contratos (placa, tipo, data_inicio, valor, pago, ativo, vaga) VALUES (?, 'diarista', ?, ?, 1, 1, ?)",
+            (placa, data, valor, vaga)
         )
         conexao.commit()
-        messagebox.showinfo("Sucesso", f"Contrato diarista registrado para {nome_cli} ({formatar_placa_exibicao(placa)}).\nValor: R$ {valor:.2f}")
+        vaga_msg = f"\nVaga alocada: {vaga}" if vaga else "\nSem vaga alocada (estacionamento lotado)."
+        messagebox.showinfo("Sucesso", f"Contrato diarista registrado para {nome_cli} ({formatar_placa_exibicao(placa)}).\nValor: R$ {valor:.2f}{vaga_msg}")
         entrada_placa_diarista.delete(0, tk.END)
         entrada_data_diarista.delete(0, tk.END)
         entrada_data_diarista.insert(0, date.today().strftime("%d/%m/%Y"))
         _preencher_valor_diarista()
         carregar_tabela_diarista()
+        atualizar_mapa_vagas()
     except Exception as e:
         messagebox.showerror("Erro", str(e))
 
@@ -1195,6 +1257,7 @@ def excluir_contrato_diarista():
     cursor.execute("DELETE FROM contratos WHERE id = ?", (id_ct,))
     conexao.commit()
     carregar_tabela_diarista()
+    atualizar_mapa_vagas()
 
 frame_btns_diarista = tk.Frame(aba_diarista, bg=BG)
 frame_btns_diarista.grid(row=2, column=0, columnspan=8, pady=(8, 4))
@@ -1484,26 +1547,36 @@ def registrar_mensalista():
         partes   = mes_ano.split("/")
         mes_int  = int(partes[0])
         ano_int  = int(partes[1])
-        data_inicio = f"{ano_int:04d}-{mes_int:02d}-01"
+        data_inicio = f"01/{mes_int:02d}/{ano_int:04d}"
         import calendar as _c
         ultimo_dia  = _c.monthrange(ano_int, mes_int)[1]
-        data_fim    = f"{ano_int:04d}-{mes_int:02d}-{ultimo_dia:02d}"
+        data_fim    = f"{ultimo_dia:02d}/{mes_int:02d}/{ano_int:04d}"
     except Exception:
-        data_inicio = date.today().strftime("%Y-%m-%d")
+        data_inicio = date.today().strftime("%d/%m/%Y")
         data_fim    = None
 
+    vaga = proxima_vaga_livre()
+    if vaga is None:
+        if not messagebox.askyesno(
+            "Sem vagas livres",
+            "Não há vagas disponíveis hoje.\nDeseja registrar o contrato mesmo assim (sem vaga alocada)?"
+        ):
+            return
+
     cursor.execute(
-        "INSERT INTO contratos (placa, tipo, data_inicio, data_fim, dias_semana, valor, pago, ativo) VALUES (?, 'mensalista', ?, ?, ?, ?, 1, 1)",
-        (placa, data_inicio, data_fim, dias_str, valor)
+        "INSERT INTO contratos (placa, tipo, data_inicio, data_fim, dias_semana, valor, pago, ativo, vaga) VALUES (?, 'mensalista', ?, ?, ?, ?, 1, 1, ?)",
+        (placa, data_inicio, data_fim, dias_str, valor, vaga)
     )
     conexao.commit()
+    vaga_msg = f"\nVaga alocada: {vaga}" if vaga else "\nSem vaga alocada (estacionamento lotado)."
     messagebox.showinfo("Sucesso",
         f"Contrato mensalista registrado para {formatar_placa_exibicao(placa)} ({cli[0]}).\n"
-        f"Dias: {dias_str}\nValor: R$ {valor:.2f}")
+        f"Dias: {dias_str}\nValor: R$ {valor:.2f}{vaga_msg}")
     entrada_placa_mensal.delete(0, tk.END)
     _preencher_valor_mensal()
     _renderizar_calendario()
     carregar_tabela_mensalista()
+    atualizar_mapa_vagas()
 
 def carregar_tabela_mensalista():
     for item in tabela_mensalista.get_children():
@@ -1532,6 +1605,7 @@ def excluir_contrato_mensalista():
     cursor.execute("DELETE FROM contratos WHERE id = ?", (id_ct,))
     conexao.commit()
     carregar_tabela_mensalista()
+    atualizar_mapa_vagas()
 
 frame_btns_mensal = tk.Frame(aba_mensalista, bg=BG)
 frame_btns_mensal.grid(row=3, column=0, columnspan=10, pady=(8, 4))
@@ -1572,7 +1646,7 @@ frame_legenda.pack(pady=(0, 10))
 tk.Canvas(frame_legenda, width=18, height=18, bg=AZUL, highlightthickness=0).pack(side="left", padx=(0, 4))
 tk.Label(frame_legenda, text="Livre", font=FONT, bg=BG, fg=BRAN).pack(side="left", padx=(0, 18))
 tk.Canvas(frame_legenda, width=18, height=18, bg=VERM, highlightthickness=0).pack(side="left", padx=(0, 4))
-tk.Label(frame_legenda, text="Ocupada", font=FONT, bg=BG, fg=BRAN).pack(side="left")
+tk.Label(frame_legenda, text="Ocupada (Rotativo/Diarista/Mensalista)", font=FONT, bg=BG, fg=BRAN).pack(side="left")
 
 frame_secoes = tk.Frame(aba_mapa, bg=BG)
 frame_secoes.pack(expand=True, fill="both", padx=30, pady=10)
@@ -1665,62 +1739,83 @@ tk.Button(aba_fin_dashboard, text="🔄 Atualizar", font=FONTB, bg=AZUL, fg=BRAN
           command=lambda: atualizar_dashboard_financeiro()).pack(pady=10)
 
 def atualizar_dashboard_financeiro():
-    hoje   = date.today().strftime("%Y-%m-%d")
-    mes    = date.today().strftime("%Y-%m")
-    ano    = date.today().strftime("%Y")
+    hoje_obj = date.today()
+    # Agora todos os campos de data são salvos como DD/MM/YYYY
+    hoje_str = hoje_obj.strftime("%d/%m/%Y")   # ex: "29/04/2026"
+    mes_str  = hoje_obj.strftime("%m/%Y")       # ex: "04/2026"
+    ano_str  = hoje_obj.strftime("%Y")          # ex: "2026"
 
-    def soma_mov(filtro_sql, params=()):
-        cursor.execute(f"SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND {filtro_sql}", params)
-        return cursor.fetchone()
+    # --- Hoje ---
+    # movimentacoes.data = "DD/MM/YYYY" exato
+    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND data=?", (hoje_str,))
+    r = cursor.fetchone(); tot_rot_dia = r[1]
 
-    def soma_contratos(filtro_sql, params=()):
-        cursor.execute(f"SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND {filtro_sql}", params)
-        return cursor.fetchone()
+    # contratos diarista com data_inicio = "DD/MM/YYYY" exato
+    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND tipo='diarista' AND data_inicio=?", (hoje_str,))
+    r = cursor.fetchone(); tot_dia_dia = r[1]
 
-    # Hoje
-    qtd_rot_dia,  tot_rot_dia  = soma_mov("data = ?", (date.today().strftime("%d-%m-%Y"),))
-    qtd_dia_dia,  tot_dia_dia  = soma_contratos("tipo='diarista' AND data_inicio LIKE ?", (f"%-%-{date.today().strftime('%d')}",))
-    qtd_men_dia,  tot_men_dia  = (0, 0)
-    total_dia = tot_rot_dia + tot_dia_dia
+    cursor.execute("""
+    SELECT COUNT(*), COALESCE(SUM(valor),0)
+    FROM contratos
+    WHERE pago=1
+    AND tipo='mensalista'
+    AND data_inicio <= ?
+    AND (data_fim IS NULL OR data_fim >= ?)
+    """, (hoje_str, hoje_str))
 
-    # Mês
-    qtd_rot_mes,  tot_rot_mes  = soma_mov("data LIKE ?", (f"%-%-{date.today().strftime('%Y')}",))
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND (data LIKE ? OR data LIKE ?)",
-                   (f"%/{date.today().strftime('%m/%Y')}%", f"%-{date.today().strftime('%m-%Y')}%"))
-    r = cursor.fetchone(); qtd_rot_mes, tot_rot_mes = r[0], r[1]
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND tipo='diarista' AND (data_inicio LIKE ? OR data_inicio LIKE ?)",
-                   (f"{ano}-{date.today().strftime('%m')}%", f"%/{date.today().strftime('%m/%Y')}%"))
-    r2 = cursor.fetchone(); qtd_dia_mes, tot_dia_mes = r2[0], r2[1]
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND tipo='mensalista' AND data_inicio LIKE ?",
-                   (f"{ano}-{date.today().strftime('%m')}%",))
-    r3 = cursor.fetchone(); qtd_men_mes, tot_men_mes = r3[0], r3[1]
+    r = cursor.fetchone()
+    tot_men_dia = r[1]
+
+    total_dia = tot_rot_dia + tot_dia_dia + tot_men_dia
+
+    # --- Mês ---
+    # movimentacoes: data LIKE "%/MM/YYYY"  ex: "%/04/2026"
+    cursor.execute(
+        "SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND data LIKE ?",
+        (f"%/{mes_str}",)
+    )
+    r = cursor.fetchone(); tot_rot_mes = r[1]
+
+    # contratos diarista: data_inicio LIKE "%/MM/YYYY"
+    cursor.execute(
+        "SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND tipo='diarista' AND data_inicio LIKE ?",
+        (f"%/{mes_str}",)
+    )
+    r = cursor.fetchone(); tot_dia_mes = r[1]
+
+    # contratos mensalista: data_inicio LIKE "01/MM/YYYY" (sempre dia 01)
+    cursor.execute(
+        "SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND tipo='mensalista' AND data_inicio LIKE ?",
+        (f"%/{mes_str}",)
+    )
+    r = cursor.fetchone(); tot_men_mes = r[1]
+
     total_mes = tot_rot_mes + tot_dia_mes + tot_men_mes
 
-    # Ano
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND (data LIKE ? OR data LIKE ?)",
-                   (f"%/{ano}%", f"%-{ano}%"))
-    r = cursor.fetchone(); qtd_rot_ano, tot_rot_ano = r[0], r[1]
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND data_inicio LIKE ?", (f"{ano}%",))
-    r2 = cursor.fetchone(); qtd_ct_ano, tot_ct_ano = r2[0], r2[1]
+    # --- Ano ---
+    # todos os campos de data terminam com "/YYYY"
+    cursor.execute(
+        "SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND data LIKE ?",
+        (f"%/{ano_str}",)
+    )
+    r = cursor.fetchone(); tot_rot_ano = r[1]
+
+    cursor.execute(
+        "SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND data_inicio LIKE ?",
+        (f"%/{ano_str}",)
+    )
+    r = cursor.fetchone(); tot_ct_ano = r[1]
+
     total_ano = tot_rot_ano + tot_ct_ano
 
-    # Total geral
+    # --- Total geral ---
     cursor.execute("SELECT COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1")
     tot_mov_all = cursor.fetchone()[0]
     cursor.execute("SELECT COALESCE(SUM(valor),0) FROM contratos WHERE pago=1")
     tot_ct_all = cursor.fetchone()[0]
     total_geral = tot_mov_all + tot_ct_all
 
-    # Hoje simplificado
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND data=?",
-                   (date.today().strftime("%d-%m-%Y"),))
-    r = cursor.fetchone(); qtd_rot_dia2, tot_rot_dia2 = r[0], r[1]
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND data_inicio=?",
-                   (date.today().strftime("%Y-%m-%d"),))
-    r2 = cursor.fetchone(); qtd_ct_dia2, tot_ct_dia2 = r2[0], r2[1]
-    total_dia2 = tot_rot_dia2 + tot_ct_dia2
-
-    var_fin_dia.set(f"R$ {total_dia2:,.2f}")
+    var_fin_dia.set(f"R$ {total_dia:,.2f}")
     var_fin_mes.set(f"R$ {total_mes:,.2f}")
     var_fin_ano.set(f"R$ {total_ano:,.2f}")
     var_fin_total.set(f"R$ {total_geral:,.2f}")

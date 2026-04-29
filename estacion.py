@@ -1425,7 +1425,6 @@ def _atualizar_valor_final_mensal():
     dias_sel = sum(1 for v in _dias_ativos.values() if v)
     lbl_resumo_cal.config(text=f"{dias_sel} dia(s) selecionado(s)")
 
-# Sobrescreve os comandos dos botões de atalho para usar nova versão
 btn_mes_prev.config(command=_mes_anterior)
 btn_mes_next.config(command=_mes_seguinte)
 entrada_valor_mensal.bind("<KeyRelease>", lambda e: _atualizar_valor_final_mensal())
@@ -1670,12 +1669,10 @@ def atualizar_dashboard_financeiro():
     mes    = date.today().strftime("%Y-%m")
     ano    = date.today().strftime("%Y")
 
-    # Rotativo — usa tabela movimentacoes
     def soma_mov(filtro_sql, params=()):
         cursor.execute(f"SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND {filtro_sql}", params)
         return cursor.fetchone()
 
-    # Contratos — usa tabela contratos
     def soma_contratos(filtro_sql, params=()):
         cursor.execute(f"SELECT COUNT(*), COALESCE(SUM(valor),0) FROM contratos WHERE pago=1 AND {filtro_sql}", params)
         return cursor.fetchone()
@@ -1687,8 +1684,7 @@ def atualizar_dashboard_financeiro():
     total_dia = tot_rot_dia + tot_dia_dia
 
     # Mês
-    qtd_rot_mes,  tot_rot_mes  = soma_mov("data LIKE ?", (f"%-%-{date.today().strftime('%Y')}",))  # fallback
-    # Melhor: buscar por ano-mês no campo data
+    qtd_rot_mes,  tot_rot_mes  = soma_mov("data LIKE ?", (f"%-%-{date.today().strftime('%Y')}",))
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND (data LIKE ? OR data LIKE ?)",
                    (f"%/{date.today().strftime('%m/%Y')}%", f"%-{date.today().strftime('%m-%Y')}%"))
     r = cursor.fetchone(); qtd_rot_mes, tot_rot_mes = r[0], r[1]
@@ -1715,7 +1711,7 @@ def atualizar_dashboard_financeiro():
     tot_ct_all = cursor.fetchone()[0]
     total_geral = tot_mov_all + tot_ct_all
 
-    # Hoje simplificado (rotativo do dia)
+    # Hoje simplificado
     cursor.execute("SELECT COUNT(*), COALESCE(SUM(valor),0) FROM movimentacoes WHERE pago=1 AND data=?",
                    (date.today().strftime("%d-%m-%Y"),))
     r = cursor.fetchone(); qtd_rot_dia2, tot_rot_dia2 = r[0], r[1]
@@ -1750,9 +1746,7 @@ sub_nb_financeiro.add(aba_fin_config, text="Configuração de Preços")
 
 # Título centralizado
 tk.Label(aba_fin_config, text="CONFIGURAÇÃO DE PREÇOS",
-         font=FONTH, bg=BG, fg=AZUL).pack(pady=(22, 4))
-tk.Label(aba_fin_config, text="Defina as tarifas e regras de cobrança do estacionamento",
-         font=FONT, bg=BG, fg=CINZA).pack(pady=(0, 16))
+         font=FONTH, bg=BG, fg=AZUL).pack(pady=(22, 20))
 
 # Container principal centralizado e expansível
 frame_cfg_main = tk.Frame(aba_fin_config, bg=BG)
@@ -1764,65 +1758,46 @@ frame_cfg_main.rowconfigure(0, weight=1)
 # ── Bloco 1: Rotativo ──
 frame_bloco_rot = tk.Frame(frame_cfg_main, bg=BG2,
                             highlightbackground=AZUL, highlightthickness=1)
-frame_bloco_rot.grid(row=0, column=0, sticky="nsew", padx=(0,10), pady=(0,10))
-frame_bloco_rot.columnconfigure((0,1), weight=1)
+frame_bloco_rot.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10))
+frame_bloco_rot.columnconfigure((0, 1), weight=1)
 
 tk.Frame(frame_bloco_rot, bg=AZUL, height=4).grid(row=0, column=0, columnspan=2, sticky="ew")
 tk.Label(frame_bloco_rot, text="ROTATIVO", font=FONTB, bg=BG2, fg=AZUL).grid(
-    row=1, column=0, columnspan=2, pady=(14,10))
+    row=1, column=0, columnspan=2, pady=(14, 10))
 
-tk.Label(frame_bloco_rot, text="Unidade de cobrança", font=FONTB, bg=BG2, fg=CINZA).grid(
-    row=2, column=0, columnspan=2, pady=(4,6))
-var_unidade = tk.StringVar(value="hora")
-frame_unidade = tk.Frame(frame_bloco_rot, bg=BG2)
-frame_unidade.grid(row=3, column=0, columnspan=2, pady=(0,10))
-tk.Radiobutton(frame_unidade, text="Por hora", variable=var_unidade, value="hora",
-               bg=BG2, fg=BRAN, selectcolor=BG3, activebackground=BG2,
-               activeforeground=BRAN, font=FONTB).pack(side="left", padx=20)
-tk.Radiobutton(frame_unidade, text="Por 30 minutos", variable=var_unidade, value="30min",
-               bg=BG2, fg=BRAN, selectcolor=BG3, activebackground=BG2,
-               activeforeground=BRAN, font=FONTB).pack(side="left", padx=20)
-
-tk.Label(frame_bloco_rot, text="Valor por unidade (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
-    row=4, column=0, pady=(8,4), padx=16, sticky="e")
+tk.Label(frame_bloco_rot, text="Valor por hora (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
+    row=2, column=0, pady=(18, 4), padx=16, sticky="e")
 entrada_cfg_rotativo = tk.Entry(frame_bloco_rot, bg=BG3, fg=BRAN, insertbackground=BRAN,
                                  borderwidth=0, font=FONTB, width=12, justify="center")
-entrada_cfg_rotativo.grid(row=4, column=1, pady=(8,4), padx=16, sticky="w", ipady=6)
+entrada_cfg_rotativo.grid(row=2, column=1, pady=(18, 4), padx=16, sticky="w", ipady=6)
 
 tk.Label(frame_bloco_rot, text="Limite máximo (horas)", font=FONTB, bg=BG2, fg=CINZA).grid(
-    row=5, column=0, pady=(4,14), padx=16, sticky="e")
+    row=3, column=0, pady=(4, 18), padx=16, sticky="e")
 entrada_cfg_limite = tk.Entry(frame_bloco_rot, bg=BG3, fg=BRAN, insertbackground=BRAN,
                                borderwidth=0, font=FONTB, width=12, justify="center")
-entrada_cfg_limite.grid(row=5, column=1, pady=(4,14), padx=16, sticky="w", ipady=6)
-
-# Preview rotativo
-frame_prev_rot = tk.Frame(frame_bloco_rot, bg=BG3)
-frame_prev_rot.grid(row=6, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 14))
-tk.Label(frame_prev_rot, text="Simulação de cobrança", font=FONTB, bg=BG3, fg=CINZA).pack(pady=(8,4))
-lbl_exemplo = tk.Label(frame_prev_rot, text="", font=FONT, bg=BG3, fg=AZUL2, justify="center")
-lbl_exemplo.pack(pady=(0,10))
+entrada_cfg_limite.grid(row=3, column=1, pady=(4, 18), padx=16, sticky="w", ipady=6)
 
 # ── Bloco 2: Diarista / Mensalista ──
 frame_bloco_dm = tk.Frame(frame_cfg_main, bg=BG2,
                            highlightbackground=AZUL, highlightthickness=1)
-frame_bloco_dm.grid(row=0, column=1, sticky="nsew", padx=(10,0), pady=(0,10))
-frame_bloco_dm.columnconfigure((0,1), weight=1)
+frame_bloco_dm.grid(row=0, column=1, sticky="nsew", padx=(10, 0), pady=(0, 10))
+frame_bloco_dm.columnconfigure((0, 1), weight=1)
 
 tk.Frame(frame_bloco_dm, bg=AZUL, height=4).grid(row=0, column=0, columnspan=2, sticky="ew")
 tk.Label(frame_bloco_dm, text="CONTRATOS", font=FONTB, bg=BG2, fg=AZUL).grid(
-    row=1, column=0, columnspan=2, pady=(14,10))
+    row=1, column=0, columnspan=2, pady=(14, 10))
 
 tk.Label(frame_bloco_dm, text="Valor padrão Diarista (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
-    row=2, column=0, pady=(8,4), padx=16, sticky="e")
+    row=2, column=0, pady=(18, 4), padx=16, sticky="e")
 entrada_cfg_diarista = tk.Entry(frame_bloco_dm, bg=BG3, fg=BRAN, insertbackground=BRAN,
                                  borderwidth=0, font=FONTB, width=12, justify="center")
-entrada_cfg_diarista.grid(row=2, column=1, pady=(8,4), padx=16, sticky="w", ipady=6)
+entrada_cfg_diarista.grid(row=2, column=1, pady=(18, 4), padx=16, sticky="w", ipady=6)
 
 tk.Label(frame_bloco_dm, text="Valor padrão Mensalista (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
-    row=3, column=0, pady=(4,14), padx=16, sticky="e")
+    row=3, column=0, pady=(4, 18), padx=16, sticky="e")
 entrada_cfg_mensalista = tk.Entry(frame_bloco_dm, bg=BG3, fg=BRAN, insertbackground=BRAN,
                                    borderwidth=0, font=FONTB, width=12, justify="center")
-entrada_cfg_mensalista.grid(row=3, column=1, pady=(4,14), padx=16, sticky="w", ipady=6)
+entrada_cfg_mensalista.grid(row=3, column=1, pady=(4, 18), padx=16, sticky="w", ipady=6)
 
 # Infos sobre contratos
 frame_info_dm = tk.Frame(frame_bloco_dm, bg=BG3)
@@ -1836,7 +1811,7 @@ for info in infos:
     tk.Label(frame_info_dm, text=f"• {info}", font=("Arial", 9), bg=BG3, fg=CINZA,
              wraplength=280, justify="left", anchor="w").pack(fill="x", padx=12, pady=3)
 
-# ── Botões de ação (row=1 spanning both cols) ──
+# ── Botões de ação ──
 frame_btn_cfg = tk.Frame(frame_cfg_main, bg=BG)
 frame_btn_cfg.grid(row=1, column=0, columnspan=2, pady=(6, 4))
 
@@ -1848,25 +1823,8 @@ tk.Label(aba_fin_config,
          text="* As configurações são salvas e aplicadas automaticamente a novos registros.",
          font=("Arial", 9), bg=BG, fg=CINZA).pack(pady=(4, 0))
 
-def atualizar_exemplo(*_):
-    try:
-        v = float(entrada_cfg_rotativo.get().replace(",", "."))
-        u = var_unidade.get()
-        if u == "hora":
-            lbl_exemplo.config(
-                text=f"30 min → R$ {v/2:.2f}     1 hora → R$ {v:.2f}     2 horas → R$ {v*2:.2f}     3 horas → R$ {v*3:.2f}")
-        else:
-            lbl_exemplo.config(
-                text=f"30 min → R$ {v:.2f}     1 hora → R$ {v*2:.2f}     2 horas → R$ {v*4:.2f}     3 horas → R$ {v*6:.2f}")
-    except Exception:
-        lbl_exemplo.config(text="Preencha o valor acima para ver a simulação")
-
-entrada_cfg_rotativo.bind("<KeyRelease>", atualizar_exemplo)
-var_unidade.trace_add("write", atualizar_exemplo)
-
 def carregar_config_financeiro():
     cfg = get_config()
-    var_unidade.set(cfg["unidade"])
     entrada_cfg_rotativo.delete(0, tk.END)
     entrada_cfg_rotativo.insert(0, str(cfg["valor_rotativo"]))
     entrada_cfg_diarista.delete(0, tk.END)
@@ -1875,7 +1833,6 @@ def carregar_config_financeiro():
     entrada_cfg_mensalista.insert(0, str(cfg["valor_mensalista"]))
     entrada_cfg_limite.delete(0, tk.END)
     entrada_cfg_limite.insert(0, str(cfg["limite_rotativo_horas"]))
-    atualizar_exemplo()
 
 def salvar_config_financeiro():
     try:
@@ -1883,17 +1840,16 @@ def salvar_config_financeiro():
         v_dia  = float(entrada_cfg_diarista.get().replace(",", "."))
         v_men  = float(entrada_cfg_mensalista.get().replace(",", "."))
         limite = int(entrada_cfg_limite.get())
-        unid   = var_unidade.get()
     except ValueError:
         messagebox.showerror("Erro", "Preencha todos os valores corretamente.")
         return
     cursor.execute("""
         UPDATE config_financeiro SET unidade=?, valor_rotativo=?, valor_diarista=?,
         valor_mensalista=?, limite_rotativo_horas=? WHERE id=1
-    """, (unid, v_rot, v_dia, v_men, limite))
+    """, ("hora", v_rot, v_dia, v_men, limite))
     conexao.commit()
     messagebox.showinfo("Sucesso", "Configurações salvas com sucesso!")
-    carregar_config_financeiro()  # recarrega automaticamente
+    carregar_config_financeiro()
 
 # ===========================================================
 # --- ABA RELATÓRIOS ---

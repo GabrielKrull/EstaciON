@@ -20,8 +20,6 @@ AZUL2 = "#1976D2"
 VERM  = "#C62828"
 BRAN  = "#FFFFFF"
 CINZA = "#9E9E9E"
-VERDE = "#2E7D32"
-VERDE2= "#388E3C"
 FONT  = ("Arial", 10)
 FONTB = ("Arial", 10, "bold")
 FONTH = ("Arial", 14, "bold")
@@ -449,7 +447,7 @@ def carregar_cards_clientes():
     frame_cards_inner.update_idletasks()
     canvas_cards.configure(scrollregion=canvas_cards.bbox("all"))
 
-TIPO_CORES = {"rotativo": AZUL, "diarista": VERDE, "mensalista": "#6A1B9A"}
+TIPO_CORES = {"rotativo": AZUL, "diarista": AZUL2, "mensalista": VERM}
 TIPO_LABELS = {"rotativo": "Rotativo", "diarista": "Diarista", "mensalista": "Mensalista"}
 
 def _criar_card(parent, cid, nome, cpf_fmt, placa_fmt, tipo="rotativo"):
@@ -940,7 +938,7 @@ def exportar_pdf_top_clientes():
         tabela = Table(dados, colWidths=[1.5*cm, 6.5*cm, 4*cm, 3*cm, 2.5*cm], repeatRows=1)
         ts = _estilo_tabela_pdf(5)
         if len(dados) > 1:
-            ts.add('BACKGROUND', (0, 1), (-1, 1), colors.HexColor("#FFF8E1"))
+            ts.add('BACKGROUND', (0, 1), (-1, 1), colors.HexColor("#1A3A6B"))
             ts.add('FONTNAME',   (0, 1), (-1, 1), 'Helvetica-Bold')
         tabela.setStyle(ts)
         story.append(tabela)
@@ -979,7 +977,7 @@ tk.Label(aba_cadastroCliente, text="Tipo:", font=FONTB, bg=BG, fg=BRAN).grid(row
 var_tipo_cliente = tk.StringVar(value="rotativo")
 frame_tipo_radio = tk.Frame(aba_cadastroCliente, bg=BG)
 frame_tipo_radio.grid(row=2, column=1, columnspan=5, sticky="w", pady=4)
-for t, lbl in [("rotativo", "🔄 Rotativo"), ("diarista", "📅 Diarista"), ("mensalista", "📆 Mensalista")]:
+for t, lbl in [("rotativo", "Rotativo"), ("diarista", "Diarista"), ("mensalista", "Mensalista")]:
     tk.Radiobutton(frame_tipo_radio, text=lbl, variable=var_tipo_cliente, value=t,
                    bg=BG, fg=BRAN, selectcolor=BG2, activebackground=BG,
                    activeforeground=BRAN, font=FONTB).pack(side="left", padx=14)
@@ -1109,7 +1107,7 @@ sub_nb_contratos.pack(expand=True, fill="both", padx=0, pady=10)
 aba_diarista = tk.Frame(sub_nb_contratos, bg=BG)
 sub_nb_contratos.add(aba_diarista, text="Diarista")
 
-tk.Label(aba_diarista, text="CONTRATO DIARISTA", font=FONTH, bg=BG, fg=VERDE).grid(row=0, column=0, columnspan=8, pady=(20, 10))
+tk.Label(aba_diarista, text="CONTRATO DIARISTA", font=FONTH, bg=BG, fg=AZUL).grid(row=0, column=0, columnspan=8, pady=(20, 10))
 
 # Formulário diarista
 tk.Label(aba_diarista, text="Placa:", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=0, padx=(15,2), sticky="e")
@@ -1201,15 +1199,12 @@ def excluir_contrato_diarista():
 frame_btns_diarista = tk.Frame(aba_diarista, bg=BG)
 frame_btns_diarista.grid(row=2, column=0, columnspan=8, pady=(8, 4))
 
-tk.Button(frame_btns_diarista, text="Registrar Diarista", bg=VERDE, fg=BRAN, font=FONTB,
-          relief="flat", width=18, cursor="hand2", activebackground=VERDE2, activeforeground=BRAN,
+tk.Button(frame_btns_diarista, text="Registrar Diarista", bg=AZUL, fg=BRAN, font=FONTB,
+          relief="flat", width=18, cursor="hand2", activebackground=AZUL2, activeforeground=BRAN,
           command=registrar_diarista).pack(side="left", padx=10)
 tk.Button(frame_btns_diarista, text="Excluir", bg=VERM, fg=BRAN, font=FONTB,
           relief="flat", width=14, cursor="hand2",
           command=excluir_contrato_diarista).pack(side="left", padx=10)
-tk.Button(frame_btns_diarista, text="Preencher Valor Padrão",
-          bg=CINZA, fg=BG, font=FONTB, relief="flat", cursor="hand2",
-          command=_preencher_valor_diarista).pack(side="left", padx=10)
 
 frame_tab_diarista = tk.Frame(aba_diarista, bg=BG)
 frame_tab_diarista.grid(row=3, column=0, columnspan=8, sticky="nsew", padx=15, pady=(6, 12))
@@ -1220,7 +1215,7 @@ tabela_diarista = ttk.Treeview(frame_tab_diarista,
 for col, w in [("ID", 50), ("Cliente", 200), ("Placa", 110), ("Data", 120), ("Valor", 90), ("Status", 90)]:
     tabela_diarista.heading(col, text=col)
     tabela_diarista.column(col, width=w, anchor="center")
-tabela_diarista.tag_configure("pago",   foreground="#A5D6A7")
+tabela_diarista.tag_configure("pago",   foreground=AZUL2)
 tabela_diarista.tag_configure("aberto", foreground=VERM)
 sb_dia = ttk.Scrollbar(frame_tab_diarista, orient="vertical", command=tabela_diarista.yview)
 tabela_diarista.configure(yscrollcommand=sb_dia.set)
@@ -1231,8 +1226,10 @@ sb_dia.pack(side="right", fill="y")
 aba_mensalista = tk.Frame(sub_nb_contratos, bg=BG)
 sub_nb_contratos.add(aba_mensalista, text="Mensalista")
 
-tk.Label(aba_mensalista, text="CONTRATO MENSALISTA", font=FONTH, bg=BG, fg="#9C27B0").grid(row=0, column=0, columnspan=8, pady=(20, 10))
+tk.Label(aba_mensalista, text="CONTRATO MENSALISTA", font=FONTH, bg=BG, fg=AZUL).grid(
+    row=0, column=0, columnspan=10, pady=(16, 8))
 
+# Linha de campos
 tk.Label(aba_mensalista, text="Placa:", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=0, padx=(15,2), sticky="e")
 entrada_placa_mensal = tk.Entry(aba_mensalista, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=12)
 entrada_placa_mensal.bind("<KeyRelease>", mascara_placa)
@@ -1243,36 +1240,223 @@ entrada_mes_mensal = tk.Entry(aba_mensalista, bg=BG2, fg=BRAN, insertbackground=
 entrada_mes_mensal.insert(0, date.today().strftime("%m/%Y"))
 entrada_mes_mensal.grid(row=1, column=3, padx=5, pady=6, sticky="ew")
 
-tk.Label(aba_mensalista, text="Valor (R$):", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=4, padx=(10,2), sticky="e")
+tk.Label(aba_mensalista, text="Valor mensal (R$):", font=FONTB, bg=BG, fg=BRAN).grid(row=1, column=4, padx=(10,2), sticky="e")
 entrada_valor_mensal = tk.Entry(aba_mensalista, bg=BG2, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=10)
 entrada_valor_mensal.grid(row=1, column=5, padx=5, pady=6, sticky="ew")
 
+tk.Label(aba_mensalista, text="Valor do contrato:", font=FONTB, bg=BG, fg=CINZA).grid(row=1, column=6, padx=(10,2), sticky="e")
+lbl_valor_final_mensal = tk.Label(aba_mensalista, text="—", font=FONTB, bg=BG, fg=AZUL2, width=10)
+lbl_valor_final_mensal.grid(row=1, column=7, padx=5, pady=6, sticky="w")
+
 aba_mensalista.columnconfigure((1, 3, 5), weight=1)
 
-# Dias da semana
-tk.Label(aba_mensalista, text="Dias da semana:", font=FONTB, bg=BG, fg=BRAN).grid(row=2, column=0, padx=(15,2), sticky="e", pady=(6, 4))
-frame_dias = tk.Frame(aba_mensalista, bg=BG)
-frame_dias.grid(row=2, column=1, columnspan=7, sticky="w", pady=(6, 4))
+# ── Calendário interativo ──────────────────────────────────
+import calendar as _cal_mod
 
-dias_semana_vars = {}
-dias_semana_nomes = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-for dia in dias_semana_nomes:
-    var = tk.BooleanVar(value=False)
-    dias_semana_vars[dia] = var
-    tk.Checkbutton(frame_dias, text=dia, variable=var, bg=BG, fg=BRAN,
-                   selectcolor=BG2, activebackground=BG, activeforeground=BRAN,
-                   font=FONT).pack(side="left", padx=6)
+# Wrapper centralizado — não expande verticalmente
+frame_cal_center = tk.Frame(aba_mensalista, bg=BG)
+frame_cal_center.grid(row=2, column=0, columnspan=10, pady=(6, 4))
+
+# Container horizontal: calendário | atalhos
+frame_cal_outer = tk.Frame(frame_cal_center, bg=BG)
+frame_cal_outer.pack()
+
+# Painel esquerdo: calendário
+frame_cal_left = tk.Frame(frame_cal_outer, bg=BG2, highlightbackground=AZUL, highlightthickness=1)
+frame_cal_left.pack(side="left", padx=(0, 10))
+
+# Cabeçalho do calendário
+frame_cal_header = tk.Frame(frame_cal_left, bg=AZUL)
+frame_cal_header.pack(fill="x")
+
+btn_mes_prev = tk.Button(frame_cal_header, text="◀", font=FONTB, bg=AZUL, fg=BRAN,
+                         relief="flat", cursor="hand2", activebackground=AZUL2, activeforeground=BRAN, bd=0)
+btn_mes_prev.pack(side="left", padx=10, pady=5)
+
+lbl_mes_cal = tk.Label(frame_cal_header, text="", font=FONTB, bg=AZUL, fg=BRAN, width=18, anchor="center")
+lbl_mes_cal.pack(side="left", expand=True)
+
+btn_mes_next = tk.Button(frame_cal_header, text="▶", font=FONTB, bg=AZUL, fg=BRAN,
+                         relief="flat", cursor="hand2", activebackground=AZUL2, activeforeground=BRAN, bd=0)
+btn_mes_next.pack(side="right", padx=10, pady=5)
+
+# Grade do calendário
+frame_cal_grade = tk.Frame(frame_cal_left, bg=BG2)
+frame_cal_grade.pack(padx=10, pady=8)
+
+dias_header = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+for ci, dh in enumerate(dias_header):
+    cor_h = VERM if dh in ("Sáb", "Dom") else CINZA
+    tk.Label(frame_cal_grade, text=dh, font=FONTB, bg=BG2, fg=cor_h, width=4).grid(
+        row=0, column=ci, padx=2, pady=(2, 4))
+
+# Estado do calendário
+_cal_ano  = [date.today().year]
+_cal_mes  = [date.today().month]
+_dias_botoes  = {}   # num_dia -> Button widget
+_dias_ativos  = {}   # num_dia -> bool (True = incluso no contrato)
+
+def _atualizar_valor_final_mensal():
+    try:
+        base = float(entrada_valor_mensal.get().replace(",", "."))
+    except ValueError:
+        lbl_valor_final_mensal.config(text="—")
+        return
+    dias_selecionados = sum(1 for v in _dias_ativos.values() if v)
+    # calcula total dias úteis do mês para proporção
+    total_dias_mes = _cal_mod.monthrange(_cal_ano[0], _cal_mes[0])[1]
+    if total_dias_mes == 0:
+        lbl_valor_final_mensal.config(text="—")
+        return
+    proporcional = round(base * (dias_selecionados / total_dias_mes), 2)
+    lbl_valor_final_mensal.config(text=f"R$ {proporcional:.2f}")
+
+def _toggle_dia(dia):
+    _dias_ativos[dia] = not _dias_ativos[dia]
+    ativo = _dias_ativos[dia]
+    btn = _dias_botoes[dia]
+    btn.configure(bg=AZUL if ativo else BG3, fg=BRAN if ativo else CINZA,
+                  relief="flat" if ativo else "flat")
+    _atualizar_valor_final_mensal()
+
+def _renderizar_calendario():
+    for w in list(_dias_botoes.values()):
+        w.destroy()
+    _dias_botoes.clear()
+    _dias_ativos.clear()
+
+    ano, mes = _cal_ano[0], _cal_mes[0]
+    nomes_mes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                 "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+    lbl_mes_cal.config(text=f"{nomes_mes[mes-1]} {ano}")
+    entrada_mes_mensal.delete(0, tk.END)
+    entrada_mes_mensal.insert(0, f"{mes:02d}/{ano}")
+
+    cal = _cal_mod.monthcalendar(ano, mes)
+    for ri, semana in enumerate(cal):
+        for ci, dia in enumerate(semana):
+            if dia == 0:
+                tk.Label(frame_cal_grade, text="", bg=BG2, width=4).grid(
+                    row=ri+1, column=ci, padx=2, pady=2)
+                continue
+            is_fds = ci >= 5  # sábado/domingo
+            _dias_ativos[dia] = True  # todos ativos por padrão
+            cor_bg = AZUL if not is_fds else AZUL2
+            btn = tk.Button(frame_cal_grade, text=str(dia), font=FONT,
+                            bg=cor_bg, fg=BRAN, relief="flat",
+                            width=4, cursor="hand2",
+                            activebackground=AZUL2, activeforeground=BRAN,
+                            command=lambda d=dia: _toggle_dia(d))
+            btn.grid(row=ri+1, column=ci, padx=2, pady=2, ipady=3)
+            _dias_botoes[dia] = btn
+    _atualizar_valor_final_mensal()
+
+def _mes_anterior():
+    m, a = _cal_mes[0] - 1, _cal_ano[0]
+    if m < 1:
+        m, a = 12, a - 1
+    _cal_mes[0], _cal_ano[0] = m, a
+    _renderizar_calendario()
+
+def _mes_seguinte():
+    m, a = _cal_mes[0] + 1, _cal_ano[0]
+    if m > 12:
+        m, a = 1, a + 1
+    _cal_mes[0], _cal_ano[0] = m, a
+    _renderizar_calendario()
+
+btn_mes_prev.config(command=_mes_anterior)
+btn_mes_next.config(command=_mes_seguinte)
+entrada_valor_mensal.bind("<KeyRelease>", lambda e: _atualizar_valor_final_mensal())
+
+# Painel direito: atalhos + resumo
+frame_cal_right = tk.Frame(frame_cal_outer, bg=BG2, highlightbackground=AZUL, highlightthickness=1, width=200)
+frame_cal_right.pack(side="left", fill="y")
+frame_cal_right.pack_propagate(False)
+
+tk.Label(frame_cal_right, text="Atalhos rápidos", font=FONTB, bg=AZUL, fg=BRAN).pack(fill="x", ipady=5)
+
+def _selecionar_todos():
+    for dia, btn in _dias_botoes.items():
+        _dias_ativos[dia] = True
+        btn.configure(bg=AZUL if _cal_mod.weekday(_cal_ano[0], _cal_mes[0], dia) < 5 else AZUL2)
+    _atualizar_valor_final_mensal()
+
+def _desmarcar_todos():
+    for dia, btn in _dias_botoes.items():
+        _dias_ativos[dia] = False
+        btn.configure(bg=BG3, fg=CINZA)
+    _atualizar_valor_final_mensal()
+
+def _apenas_uteis():
+    for dia, btn in _dias_botoes.items():
+        wd = _cal_mod.weekday(_cal_ano[0], _cal_mes[0], dia)
+        _dias_ativos[dia] = wd < 5
+        btn.configure(bg=AZUL if wd < 5 else BG3, fg=BRAN if wd < 5 else CINZA)
+    _atualizar_valor_final_mensal()
+
+def _apenas_fds():
+    for dia, btn in _dias_botoes.items():
+        wd = _cal_mod.weekday(_cal_ano[0], _cal_mes[0], dia)
+        _dias_ativos[dia] = wd >= 5
+        btn.configure(bg=AZUL2 if wd >= 5 else BG3, fg=BRAN if wd >= 5 else CINZA)
+    _atualizar_valor_final_mensal()
+
+for txt, cmd in [
+    ("Selecionar todos",    _selecionar_todos),
+    ("Desmarcar todos",     _desmarcar_todos),
+    ("Apenas dias uteis",   _apenas_uteis),
+    ("Apenas fim de semana", _apenas_fds),
+]:
+    tk.Button(frame_cal_right, text=txt, font=FONT, bg=BG3, fg=BRAN,
+              relief="flat", cursor="hand2", anchor="w", padx=14, pady=6,
+              activebackground=AZUL, activeforeground=BRAN,
+              command=cmd).pack(fill="x", pady=1)
+
+tk.Label(frame_cal_right, text="", bg=BG2).pack(expand=True)
+
+lbl_resumo_cal = tk.Label(frame_cal_right, text="0 dias selecionados",
+                           font=FONT, bg=BG2, fg=CINZA, wraplength=200)
+lbl_resumo_cal.pack(pady=(4, 10))
+
+_orig_atualizar = _atualizar_valor_final_mensal
+def _atualizar_valor_final_mensal():
+    _orig_atualizar()
+    dias_sel = sum(1 for v in _dias_ativos.values() if v)
+    lbl_resumo_cal.config(text=f"{dias_sel} dia(s) selecionado(s)")
+
+# Sobrescreve os comandos dos botões de atalho para usar nova versão
+btn_mes_prev.config(command=_mes_anterior)
+btn_mes_next.config(command=_mes_seguinte)
+entrada_valor_mensal.bind("<KeyRelease>", lambda e: _atualizar_valor_final_mensal())
+
+# redefinir _toggle_dia para usar nova versão
+def _toggle_dia(dia):
+    _dias_ativos[dia] = not _dias_ativos[dia]
+    ativo = _dias_ativos[dia]
+    btn = _dias_botoes[dia]
+    wd = _cal_mod.weekday(_cal_ano[0], _cal_mes[0], dia)
+    cor = (AZUL2 if wd >= 5 else AZUL) if ativo else BG3
+    cor_fg = BRAN if ativo else CINZA
+    btn.configure(bg=cor, fg=cor_fg)
+    _atualizar_valor_final_mensal()
+
+_renderizar_calendario()
 
 def _preencher_valor_mensal():
     cfg = get_config()
     entrada_valor_mensal.delete(0, tk.END)
     entrada_valor_mensal.insert(0, str(cfg["valor_mensalista"]))
+    _atualizar_valor_final_mensal()
 
 def registrar_mensalista():
-    placa = limpar_placa(entrada_placa_mensal.get())
+    placa   = limpar_placa(entrada_placa_mensal.get())
     mes_ano = entrada_mes_mensal.get().strip()
+
+    # Valor final proporcional (exibido no label), senão usa o base
     try:
-        valor = float(entrada_valor_mensal.get().replace(",", "."))
+        txt_final = lbl_valor_final_mensal.cget("text").replace("R$", "").replace(",", ".").strip()
+        valor = float(txt_final) if txt_final != "—" else float(entrada_valor_mensal.get().replace(",", "."))
     except ValueError:
         messagebox.showerror("Erro", "Valor inválido.")
         return
@@ -1287,35 +1471,39 @@ def registrar_mensalista():
         messagebox.showerror("Erro", "Placa não cadastrada.")
         return
 
-    dias_escolhidos = [d for d, v in dias_semana_vars.items() if v.get()]
-    dias_str = ",".join(dias_escolhidos) if dias_escolhidos else "Todos os dias"
+    # Monta string de dias a partir do calendário
+    dias_ativos_lista = sorted([d for d, v in _dias_ativos.items() if v])
+    if len(dias_ativos_lista) == _cal_mod.monthrange(_cal_ano[0], _cal_mes[0])[1]:
+        dias_str = "Todos os dias"
+    elif dias_ativos_lista:
+        dias_str = ",".join(str(d) for d in dias_ativos_lista)
+    else:
+        messagebox.showerror("Erro", "Selecione ao menos um dia no calendário.")
+        return
 
     try:
-        # data_inicio = primeiro dia do mês/ano
-        partes = mes_ano.split("/")
-        mes_int = int(partes[0])
-        ano_int = int(partes[1])
+        partes   = mes_ano.split("/")
+        mes_int  = int(partes[0])
+        ano_int  = int(partes[1])
         data_inicio = f"{ano_int:04d}-{mes_int:02d}-01"
-        # data_fim = último dia
-        import calendar
-        ultimo_dia = calendar.monthrange(ano_int, mes_int)[1]
-        data_fim = f"{ano_int:04d}-{mes_int:02d}-{ultimo_dia:02d}"
+        import calendar as _c
+        ultimo_dia  = _c.monthrange(ano_int, mes_int)[1]
+        data_fim    = f"{ano_int:04d}-{mes_int:02d}-{ultimo_dia:02d}"
     except Exception:
         data_inicio = date.today().strftime("%Y-%m-%d")
-        data_fim = None
+        data_fim    = None
 
     cursor.execute(
         "INSERT INTO contratos (placa, tipo, data_inicio, data_fim, dias_semana, valor, pago, ativo) VALUES (?, 'mensalista', ?, ?, ?, ?, 1, 1)",
         (placa, data_inicio, data_fim, dias_str, valor)
     )
     conexao.commit()
-    messagebox.showinfo("Sucesso", f"Contrato mensalista registrado para {formatar_placa_exibicao(placa)}.\nDias: {dias_str}\nValor: R$ {valor:.2f}")
+    messagebox.showinfo("Sucesso",
+        f"Contrato mensalista registrado para {formatar_placa_exibicao(placa)} ({cli[0]}).\n"
+        f"Dias: {dias_str}\nValor: R$ {valor:.2f}")
     entrada_placa_mensal.delete(0, tk.END)
-    entrada_mes_mensal.delete(0, tk.END)
-    entrada_mes_mensal.insert(0, date.today().strftime("%m/%Y"))
     _preencher_valor_mensal()
-    for v in dias_semana_vars.values():
-        v.set(False)
+    _renderizar_calendario()
     carregar_tabela_mensalista()
 
 def carregar_tabela_mensalista():
@@ -1347,20 +1535,17 @@ def excluir_contrato_mensalista():
     carregar_tabela_mensalista()
 
 frame_btns_mensal = tk.Frame(aba_mensalista, bg=BG)
-frame_btns_mensal.grid(row=3, column=0, columnspan=8, pady=(8, 4))
+frame_btns_mensal.grid(row=3, column=0, columnspan=10, pady=(8, 4))
 
-tk.Button(frame_btns_mensal, text="Registrar Mensalista", bg="#6A1B9A", fg=BRAN, font=FONTB,
-          relief="flat", width=18, cursor="hand2", activebackground="#7B1FA2", activeforeground=BRAN,
+tk.Button(frame_btns_mensal, text="Registrar Mensalista", bg=AZUL, fg=BRAN, font=FONTB,
+          relief="flat", width=18, cursor="hand2", activebackground=AZUL2, activeforeground=BRAN,
           command=registrar_mensalista).pack(side="left", padx=10)
 tk.Button(frame_btns_mensal, text="Excluir", bg=VERM, fg=BRAN, font=FONTB,
           relief="flat", width=14, cursor="hand2",
           command=excluir_contrato_mensalista).pack(side="left", padx=10)
-tk.Button(frame_btns_mensal, text="Preencher Valor Padrão",
-          bg=CINZA, fg=BG, font=FONTB, relief="flat", cursor="hand2",
-          command=_preencher_valor_mensal).pack(side="left", padx=10)
 
 frame_tab_mensal = tk.Frame(aba_mensalista, bg=BG)
-frame_tab_mensal.grid(row=4, column=0, columnspan=8, sticky="nsew", padx=15, pady=(6, 12))
+frame_tab_mensal.grid(row=4, column=0, columnspan=10, sticky="nsew", padx=15, pady=(6, 12))
 aba_mensalista.rowconfigure(4, weight=1)
 
 tabela_mensalista = ttk.Treeview(frame_tab_mensal,
@@ -1368,7 +1553,7 @@ tabela_mensalista = ttk.Treeview(frame_tab_mensal,
 for col, w in [("ID", 40), ("Cliente", 160), ("Placa", 90), ("Início", 90), ("Fim", 90), ("Dias", 180), ("Valor", 80), ("Status", 80)]:
     tabela_mensalista.heading(col, text=col)
     tabela_mensalista.column(col, width=w, anchor="center")
-tabela_mensalista.tag_configure("pago",   foreground="#CE93D8")
+tabela_mensalista.tag_configure("pago",   foreground=AZUL2)
 tabela_mensalista.tag_configure("aberto", foreground=VERM)
 sb_men = ttk.Scrollbar(frame_tab_mensal, orient="vertical", command=tabela_mensalista.yview)
 tabela_mensalista.configure(yscrollcommand=sb_men.set)
@@ -1455,10 +1640,10 @@ var_fin_mes   = tk.StringVar(value="R$ 0,00")
 var_fin_ano   = tk.StringVar(value="R$ 0,00")
 var_fin_total = tk.StringVar(value="R$ 0,00")
 
-_criar_card_fin(frame_cards_fin, "Hoje",    var_fin_dia,   AZUL2)
-_criar_card_fin(frame_cards_fin, "Mês",     var_fin_mes,   VERDE)
-_criar_card_fin(frame_cards_fin, "Ano",     var_fin_ano,   "#F57C00")
-_criar_card_fin(frame_cards_fin, "Total Geral", var_fin_total, "#9C27B0")
+_criar_card_fin(frame_cards_fin, "Hoje",       var_fin_dia,   AZUL)
+_criar_card_fin(frame_cards_fin, "Mês",        var_fin_mes,   AZUL2)
+_criar_card_fin(frame_cards_fin, "Ano",        var_fin_ano,   VERM)
+_criar_card_fin(frame_cards_fin, "Total Geral",var_fin_total, CINZA)
 
 # Tabela detalhada por período
 tk.Label(aba_fin_dashboard, text="Detalhe de recebimentos por período:", font=FONTB, bg=BG, fg=CINZA).pack(anchor="w", padx=30, pady=(6, 4))
@@ -1563,54 +1748,118 @@ def atualizar_dashboard_financeiro():
 aba_fin_config = tk.Frame(sub_nb_financeiro, bg=BG)
 sub_nb_financeiro.add(aba_fin_config, text="Configuração de Preços")
 
-tk.Label(aba_fin_config, text="CONFIGURAÇÃO DE PREÇOS", font=FONTH, bg=BG, fg=AZUL).pack(pady=(24, 20))
+# Título centralizado
+tk.Label(aba_fin_config, text="CONFIGURAÇÃO DE PREÇOS",
+         font=FONTH, bg=BG, fg=AZUL).pack(pady=(22, 4))
+tk.Label(aba_fin_config, text="Defina as tarifas e regras de cobrança do estacionamento",
+         font=FONT, bg=BG, fg=CINZA).pack(pady=(0, 16))
 
-frame_config_form = tk.Frame(aba_fin_config, bg=BG2, highlightbackground=AZUL, highlightthickness=1)
-frame_config_form.pack(padx=60, pady=10, fill="x")
+# Container principal centralizado e expansível
+frame_cfg_main = tk.Frame(aba_fin_config, bg=BG)
+frame_cfg_main.pack(fill="both", expand=True, padx=40, pady=(0, 10))
+frame_cfg_main.columnconfigure(0, weight=1)
+frame_cfg_main.columnconfigure(1, weight=1)
+frame_cfg_main.rowconfigure(0, weight=1)
 
-tk.Label(frame_config_form, text="ROTATIVO", font=FONTB, bg=BG2, fg=AZUL).grid(row=0, column=0, columnspan=4, pady=(16, 8))
+# ── Bloco 1: Rotativo ──
+frame_bloco_rot = tk.Frame(frame_cfg_main, bg=BG2,
+                            highlightbackground=AZUL, highlightthickness=1)
+frame_bloco_rot.grid(row=0, column=0, sticky="nsew", padx=(0,10), pady=(0,10))
+frame_bloco_rot.columnconfigure((0,1), weight=1)
 
-tk.Label(frame_config_form, text="Unidade de cobrança:", font=FONTB, bg=BG2, fg=BRAN).grid(row=1, column=0, sticky="e", padx=(20,10), pady=8)
+tk.Frame(frame_bloco_rot, bg=AZUL, height=4).grid(row=0, column=0, columnspan=2, sticky="ew")
+tk.Label(frame_bloco_rot, text="ROTATIVO", font=FONTB, bg=BG2, fg=AZUL).grid(
+    row=1, column=0, columnspan=2, pady=(14,10))
+
+tk.Label(frame_bloco_rot, text="Unidade de cobrança", font=FONTB, bg=BG2, fg=CINZA).grid(
+    row=2, column=0, columnspan=2, pady=(4,6))
 var_unidade = tk.StringVar(value="hora")
-frame_unidade = tk.Frame(frame_config_form, bg=BG2)
-frame_unidade.grid(row=1, column=1, sticky="w", pady=8)
+frame_unidade = tk.Frame(frame_bloco_rot, bg=BG2)
+frame_unidade.grid(row=3, column=0, columnspan=2, pady=(0,10))
 tk.Radiobutton(frame_unidade, text="Por hora", variable=var_unidade, value="hora",
-               bg=BG2, fg=BRAN, selectcolor=BG3, activebackground=BG2, activeforeground=BRAN, font=FONT).pack(side="left", padx=8)
+               bg=BG2, fg=BRAN, selectcolor=BG3, activebackground=BG2,
+               activeforeground=BRAN, font=FONTB).pack(side="left", padx=20)
 tk.Radiobutton(frame_unidade, text="Por 30 minutos", variable=var_unidade, value="30min",
-               bg=BG2, fg=BRAN, selectcolor=BG3, activebackground=BG2, activeforeground=BRAN, font=FONT).pack(side="left", padx=8)
+               bg=BG2, fg=BRAN, selectcolor=BG3, activebackground=BG2,
+               activeforeground=BRAN, font=FONTB).pack(side="left", padx=20)
 
-tk.Label(frame_config_form, text="Valor rotativo (R$):", font=FONTB, bg=BG2, fg=BRAN).grid(row=2, column=0, sticky="e", padx=(20,10), pady=8)
-entrada_cfg_rotativo = tk.Entry(frame_config_form, bg=BG3, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=14)
-entrada_cfg_rotativo.grid(row=2, column=1, sticky="w", pady=8, ipady=4)
+tk.Label(frame_bloco_rot, text="Valor por unidade (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
+    row=4, column=0, pady=(8,4), padx=16, sticky="e")
+entrada_cfg_rotativo = tk.Entry(frame_bloco_rot, bg=BG3, fg=BRAN, insertbackground=BRAN,
+                                 borderwidth=0, font=FONTB, width=12, justify="center")
+entrada_cfg_rotativo.grid(row=4, column=1, pady=(8,4), padx=16, sticky="w", ipady=6)
 
-tk.Label(frame_config_form, text="Limite horas rotativo:", font=FONTB, bg=BG2, fg=BRAN).grid(row=2, column=2, sticky="e", padx=(20,10), pady=8)
-entrada_cfg_limite = tk.Entry(frame_config_form, bg=BG3, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=8)
-entrada_cfg_limite.grid(row=2, column=3, sticky="w", pady=8, ipady=4, padx=(0, 20))
+tk.Label(frame_bloco_rot, text="Limite máximo (horas)", font=FONTB, bg=BG2, fg=CINZA).grid(
+    row=5, column=0, pady=(4,14), padx=16, sticky="e")
+entrada_cfg_limite = tk.Entry(frame_bloco_rot, bg=BG3, fg=BRAN, insertbackground=BRAN,
+                               borderwidth=0, font=FONTB, width=12, justify="center")
+entrada_cfg_limite.grid(row=5, column=1, pady=(4,14), padx=16, sticky="w", ipady=6)
 
-tk.Label(frame_config_form, text="DIARISTA / MENSALISTA", font=FONTB, bg=BG2, fg=VERDE).grid(row=3, column=0, columnspan=4, pady=(14, 8))
+# Preview rotativo
+frame_prev_rot = tk.Frame(frame_bloco_rot, bg=BG3)
+frame_prev_rot.grid(row=6, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 14))
+tk.Label(frame_prev_rot, text="Simulação de cobrança", font=FONTB, bg=BG3, fg=CINZA).pack(pady=(8,4))
+lbl_exemplo = tk.Label(frame_prev_rot, text="", font=FONT, bg=BG3, fg=AZUL2, justify="center")
+lbl_exemplo.pack(pady=(0,10))
 
-tk.Label(frame_config_form, text="Valor diarista (R$):", font=FONTB, bg=BG2, fg=BRAN).grid(row=4, column=0, sticky="e", padx=(20,10), pady=8)
-entrada_cfg_diarista = tk.Entry(frame_config_form, bg=BG3, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=14)
-entrada_cfg_diarista.grid(row=4, column=1, sticky="w", pady=8, ipady=4)
+# ── Bloco 2: Diarista / Mensalista ──
+frame_bloco_dm = tk.Frame(frame_cfg_main, bg=BG2,
+                           highlightbackground=AZUL, highlightthickness=1)
+frame_bloco_dm.grid(row=0, column=1, sticky="nsew", padx=(10,0), pady=(0,10))
+frame_bloco_dm.columnconfigure((0,1), weight=1)
 
-tk.Label(frame_config_form, text="Valor mensalista (R$):", font=FONTB, bg=BG2, fg=BRAN).grid(row=4, column=2, sticky="e", padx=(20,10), pady=8)
-entrada_cfg_mensalista = tk.Entry(frame_config_form, bg=BG3, fg=BRAN, insertbackground=BRAN, borderwidth=0, font=FONT, width=14)
-entrada_cfg_mensalista.grid(row=4, column=3, sticky="w", pady=8, ipady=4, padx=(0, 20))
+tk.Frame(frame_bloco_dm, bg=AZUL, height=4).grid(row=0, column=0, columnspan=2, sticky="ew")
+tk.Label(frame_bloco_dm, text="CONTRATOS", font=FONTB, bg=BG2, fg=AZUL).grid(
+    row=1, column=0, columnspan=2, pady=(14,10))
 
-tk.Label(frame_config_form, text="Exemplo com valor rotativo configurado:", font=FONT, bg=BG2, fg=CINZA).grid(row=5, column=0, columnspan=4, pady=(4, 4))
-lbl_exemplo = tk.Label(frame_config_form, text="", font=FONT, bg=BG2, fg=AZUL2)
-lbl_exemplo.grid(row=6, column=0, columnspan=4, pady=(0, 16))
+tk.Label(frame_bloco_dm, text="Valor padrão Diarista (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
+    row=2, column=0, pady=(8,4), padx=16, sticky="e")
+entrada_cfg_diarista = tk.Entry(frame_bloco_dm, bg=BG3, fg=BRAN, insertbackground=BRAN,
+                                 borderwidth=0, font=FONTB, width=12, justify="center")
+entrada_cfg_diarista.grid(row=2, column=1, pady=(8,4), padx=16, sticky="w", ipady=6)
+
+tk.Label(frame_bloco_dm, text="Valor padrão Mensalista (R$)", font=FONTB, bg=BG2, fg=CINZA).grid(
+    row=3, column=0, pady=(4,14), padx=16, sticky="e")
+entrada_cfg_mensalista = tk.Entry(frame_bloco_dm, bg=BG3, fg=BRAN, insertbackground=BRAN,
+                                   borderwidth=0, font=FONTB, width=12, justify="center")
+entrada_cfg_mensalista.grid(row=3, column=1, pady=(4,14), padx=16, sticky="w", ipady=6)
+
+# Infos sobre contratos
+frame_info_dm = tk.Frame(frame_bloco_dm, bg=BG3)
+frame_info_dm.grid(row=4, column=0, columnspan=2, sticky="ew", padx=14, pady=(0, 14))
+infos = [
+    "Diarista — cobrado por dia de uso.",
+    "Mensalista — valor proporcional aos dias selecionados no calendário.",
+    "Os valores aqui são apenas sugestões e podem ser ajustados no ato do contrato.",
+]
+for info in infos:
+    tk.Label(frame_info_dm, text=f"• {info}", font=("Arial", 9), bg=BG3, fg=CINZA,
+             wraplength=280, justify="left", anchor="w").pack(fill="x", padx=12, pady=3)
+
+# ── Botões de ação (row=1 spanning both cols) ──
+frame_btn_cfg = tk.Frame(frame_cfg_main, bg=BG)
+frame_btn_cfg.grid(row=1, column=0, columnspan=2, pady=(6, 4))
+
+tk.Button(frame_btn_cfg, text="Salvar Configurações", command=lambda: salvar_config_financeiro(),
+          bg=AZUL, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
+          activebackground=AZUL2, activeforeground=BRAN, padx=24, pady=10).pack(padx=10)
+
+tk.Label(aba_fin_config,
+         text="* As configurações são salvas e aplicadas automaticamente a novos registros.",
+         font=("Arial", 9), bg=BG, fg=CINZA).pack(pady=(4, 0))
 
 def atualizar_exemplo(*_):
     try:
         v = float(entrada_cfg_rotativo.get().replace(",", "."))
         u = var_unidade.get()
         if u == "hora":
-            lbl_exemplo.config(text=f"1 hora = R$ {v:.2f}  |  2 horas = R$ {v*2:.2f}  |  30 min = R$ {v/2:.2f}")
+            lbl_exemplo.config(
+                text=f"30 min → R$ {v/2:.2f}     1 hora → R$ {v:.2f}     2 horas → R$ {v*2:.2f}     3 horas → R$ {v*3:.2f}")
         else:
-            lbl_exemplo.config(text=f"30 min = R$ {v:.2f}  |  1 hora = R$ {v*2:.2f}  |  2 horas = R$ {v*4:.2f}")
+            lbl_exemplo.config(
+                text=f"30 min → R$ {v:.2f}     1 hora → R$ {v*2:.2f}     2 horas → R$ {v*4:.2f}     3 horas → R$ {v*6:.2f}")
     except Exception:
-        lbl_exemplo.config(text="Preencha o valor para ver exemplos")
+        lbl_exemplo.config(text="Preencha o valor acima para ver a simulação")
 
 entrada_cfg_rotativo.bind("<KeyRelease>", atualizar_exemplo)
 var_unidade.trace_add("write", atualizar_exemplo)
@@ -1638,25 +1887,13 @@ def salvar_config_financeiro():
     except ValueError:
         messagebox.showerror("Erro", "Preencha todos os valores corretamente.")
         return
-
     cursor.execute("""
-        UPDATE config_financeiro SET unidade=?, valor_rotativo=?, valor_diarista=?, valor_mensalista=?, limite_rotativo_horas=?
-        WHERE id=1
+        UPDATE config_financeiro SET unidade=?, valor_rotativo=?, valor_diarista=?,
+        valor_mensalista=?, limite_rotativo_horas=? WHERE id=1
     """, (unid, v_rot, v_dia, v_men, limite))
     conexao.commit()
-    messagebox.showinfo("Sucesso", "Configurações financeiras salvas com sucesso!")
-    atualizar_exemplo()
-
-frame_btn_cfg = tk.Frame(aba_fin_config, bg=BG)
-frame_btn_cfg.pack(pady=18)
-tk.Button(frame_btn_cfg, text="💾  Salvar Configurações", command=salvar_config_financeiro,
-          bg=AZUL, fg=BRAN, font=FONTB, relief="flat", cursor="hand2",
-          activebackground=AZUL2, activeforeground=BRAN, padx=18, pady=8).pack(side="left", padx=10)
-tk.Button(frame_btn_cfg, text="↩  Recarregar", command=carregar_config_financeiro,
-          bg=CINZA, fg=BG, font=FONTB, relief="flat", cursor="hand2", padx=18, pady=8).pack(side="left", padx=10)
-
-tk.Label(aba_fin_config, text="* As alterações de preço afetam novas movimentações. Registros anteriores não são alterados.",
-         font=("Arial", 9), bg=BG, fg=CINZA).pack(pady=(0, 10))
+    messagebox.showinfo("Sucesso", "Configurações salvas com sucesso!")
+    carregar_config_financeiro()  # recarrega automaticamente
 
 # ===========================================================
 # --- ABA RELATÓRIOS ---
